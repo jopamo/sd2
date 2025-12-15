@@ -15,6 +15,7 @@ mod model;
 mod replacer;
 mod reporter;
 mod rgjson;
+mod transaction;
 mod write;
 
 fn parse_range(s: &str) -> Option<LineRange> {

@@ -19,9 +19,22 @@ impl Default for WriteOptions {
     }
 }
 
-/// Write data to a file atomically.
-/// Preserves file permissions and handles symbolic links according to options.
-pub fn write_file(path: &Path, data: &[u8], options: &WriteOptions) -> Result<()> {
+/// A staged file write, ready to be committed.
+pub struct StagedEntry {
+    temp: NamedTempFile,
+    target: PathBuf,
+}
+
+impl StagedEntry {
+    /// Commit the staged file (atomic rename).
+    pub fn commit(self) -> Result<()> {
+        self.temp.persist(&self.target).map_err(|e| Error::Io(e.error))?;
+        Ok(())
+    }
+}
+
+/// Prepare a file for writing (create temp, write content, copy perms).
+pub fn stage_file(path: &Path, data: &[u8], options: &WriteOptions) -> Result<StagedEntry> {
     let target_path = resolve_symlink(path, options)?;
 
     // Write atomically using a temporary file in the same directory
@@ -41,8 +54,17 @@ pub fn write_file(path: &Path, data: &[u8], options: &WriteOptions) -> Result<()
         temp.flush()?;
     }
 
-    // Atomically replace the target file
-    temp.persist(&target_path)?;
+    Ok(StagedEntry {
+        temp,
+        target: target_path,
+    })
+}
+
+/// Write data to a file atomically.
+/// Preserves file permissions and handles symbolic links according to options.
+pub fn write_file(path: &Path, data: &[u8], options: &WriteOptions) -> Result<()> {
+    let staged = stage_file(path, data, options)?;
+    staged.commit()?;
     Ok(())
 }
 

@@ -1,10 +1,11 @@
 use crate::error::{Error, Result};
-use crate::model::{Pipeline, Operation};
+use crate::model::{Pipeline, Operation, Transaction};
 use crate::replacer::Replacer;
-use crate::write::{write_file, WriteOptions};
+use crate::write::{write_file, stage_file, WriteOptions};
 use crate::reporter::{Report, FileResult};
 use crate::input::InputItem;
 use crate::model::ReplacementRange;
+use crate::transaction::TransactionManager;
 use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::path::PathBuf;
@@ -31,11 +32,17 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
 
     let mut report = Report::new(pipeline.dry_run, validate_only);
 
+    let mut tm = if pipeline.transaction == Transaction::All {
+        Some(TransactionManager::new())
+    } else {
+        None
+    };
+
     for input in inputs {
         match input {
             InputItem::Path(path_buf) => {
                 let path_str = path_buf.to_string_lossy().into_owned();
-                let result = process_file(&path_str, &pipeline.operations, &pipeline, None);
+                let result = process_file(&path_str, &pipeline.operations, &pipeline, None, &mut tm);
                 let has_error = result.error.is_some();
                 report.add_result(result);
 
@@ -45,7 +52,7 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
             }
             InputItem::RipgrepMatch { path, matches } => {
                 let path_str = path.to_string_lossy().into_owned();
-                let result = process_file(&path_str, &pipeline.operations, &pipeline, Some(&matches));
+                let result = process_file(&path_str, &pipeline.operations, &pipeline, Some(&matches), &mut tm);
                 let has_error = result.error.is_some();
                 report.add_result(result);
 
@@ -80,6 +87,13 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
             "Changes detected in {} files (--fail-on-change)",
             report.modified
         ));
+    }
+
+    // Commit if no errors and no policy violations
+    if report.exit_code() == 0 {
+        if let Some(manager) = tm {
+            manager.commit().map_err(|e| Error::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        }
     }
 
     Ok(report)
@@ -192,6 +206,7 @@ fn process_file(
     operations: &[Operation],
     pipeline: &Pipeline,
     matches: Option<&[ReplacementRange]>,
+    tm: &mut Option<TransactionManager>,
 ) -> FileResult {
     let path_buf = PathBuf::from(path);
     
@@ -219,14 +234,30 @@ fn process_file(
                     // This is temporary until write::write_file is updated.
                     no_follow_symlinks: pipeline.symlinks != crate::model::Symlinks::Follow,
                 };
-                if let Err(e) = write_file(&path_buf, new_content.as_bytes(), &options) {
-                     return FileResult {
-                        path: path_buf,
-                        modified: false,
-                        replacements: 0,
-                        error: Some(e.to_string()),
-                        diff: None,
-                    };
+                
+                if let Some(manager) = tm {
+                    // Stage
+                    match stage_file(&path_buf, new_content.as_bytes(), &options) {
+                        Ok(staged) => manager.stage(staged),
+                        Err(e) => return FileResult {
+                            path: path_buf,
+                            modified: false,
+                            replacements: 0,
+                            error: Some(e.to_string()),
+                            diff: None,
+                        },
+                    }
+                } else {
+                    // Write immediately
+                    if let Err(e) = write_file(&path_buf, new_content.as_bytes(), &options) {
+                         return FileResult {
+                            path: path_buf,
+                            modified: false,
+                            replacements: 0,
+                            error: Some(e.to_string()),
+                            diff: None,
+                        };
+                    }
                 }
             }
 

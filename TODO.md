@@ -171,7 +171,7 @@ These should be enforced in engine/report as policy checks.
 
 ### Transaction Model
 
-* [ ] **`--transaction all|file`**
+* [x] **`--transaction all|file`**
   **Rust design**
 
   * `enum TransactionMode { All, File }`
