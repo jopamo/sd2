@@ -109,7 +109,7 @@ fn try_main() -> Result<i32> {
     );
 
     // 1. Collect inputs
-    let inputs: Vec<InputItem> = match mode {
+    let mut inputs: Vec<InputItem> = match mode {
         InputMode::Auto(ref paths) => {
             if !paths.is_empty() {
                  paths.iter().map(|p| InputItem::Path(p.clone())).collect()
@@ -180,7 +180,7 @@ fn try_main() -> Result<i32> {
             no_unicode: args.no_unicode,
             limit: args.limit.unwrap_or(0),
             range,
-            expand: false, // CLI currently doesn't expose a flag for expansion, defaulting to safe false
+            expand: args.expand,
         };
 
         // Resolve permissions
@@ -203,6 +203,13 @@ fn try_main() -> Result<i32> {
             glob_exclude: if args.glob_exclude.is_empty() { None } else { Some(args.glob_exclude) },
         }
     };
+
+    // Populate inputs from pipeline files if empty (common in apply mode)
+    if inputs.is_empty() && !pipeline.files.is_empty() {
+        for f in &pipeline.files {
+            inputs.push(InputItem::Path(std::path::PathBuf::from(f)));
+        }
+    }
 
     // 3. Execute
     let pipeline_for_report = pipeline.clone();

@@ -43,7 +43,7 @@ fn test_operation_replace_expand() {
         "operations": [
             {
                 "type": "replace",
-                "find": "(\w+): (\w+)",
+                "find": r"(\w+): (\w+)",
                 "with": "$2=$1",
                 "expand": true
             }
@@ -74,7 +74,7 @@ fn test_operation_delete_regex() {
         "operations": [
             {
                 "type": "delete",
-                "find": "\\d+\\s+",
+                "find": r"\d+\s+",
                 "literal": false
             }
         ]

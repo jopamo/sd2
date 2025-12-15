@@ -157,6 +157,10 @@ pub struct DefaultArgs {
     #[arg(long = "range", value_name = "START[:END]")]
     pub range: Option<String>,
 
+    /// Enable regex capture expansion (e.g. $1, $name).
+    #[arg(long = "expand")]
+    pub expand: bool,
+
     /// Apply edits only to files whose *path* matches the glob.
     #[arg(long = "glob-include", value_name = "GLOB")]
     pub glob_include: Vec<String>,

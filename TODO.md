@@ -33,14 +33,14 @@
 
 ##🔮 Phase 3: The "Manifest" Evolution (Next Feature Set)*Now that the CLI is safe, turn the tool into a generalized refactoring engine via the Manifest.*
 
-###4) Expanded Operation Primitives* [ ] **Schema Expansion:** Update `Operation` enum to support:
+###4) Expanded Operation Primitives* [x] **Schema Expansion:** Update `Operation` enum to support:
 * `replace` (current behavior)
 * `delete` (remove match entirely)
 * `insert_before` / `insert_after`
 
 
-* [ ] **Regex Capture Groups:** Investigate support for `$1` / `${1}` capture expansion in replacement strings.
-* *Decision:* Gate behind a `--enable-captures` flag for safety?
+* [x] **Regex Capture Groups:** Investigate support for `$1` / `${1}` capture expansion in replacement strings.
+* *Decision:* Gate behind a `--enable-captures` flag for safety? (Implemented `expand` flag)
 
 
 
