@@ -12,6 +12,8 @@ pub struct FileResult {
     pub replacements: usize,
     /// Error, if any.
     pub error: Option<String>,
+    /// Reason for skipping the file, if skipped.
+    pub skipped: Option<String>,
     /// Diff lines (if dry_run or preview).
     pub diff: Option<String>,
 }
@@ -81,6 +83,8 @@ impl Report {
         for file in &self.files {
             if let Some(err) = &file.error {
                 println!("  {}: ERROR - {}", file.path.display(), err);
+            } else if let Some(reason) = &file.skipped {
+                println!("  {}: skipped ({})", file.path.display(), reason);
             } else if file.modified {
                 println!("  {}: modified ({} replacements)", file.path.display(), file.replacements);
                 if let Some(diff) = &file.diff {
@@ -99,7 +103,12 @@ impl Report {
         } else if self.has_errors {
             1
         } else if self.modified == 0 && self.total > 0 {
-            1 // No changes -> 1 (standard diff/grep behavior)
+            // Check if all files were skipped or just no matches
+            // Standard diff/grep: exit 1 if no changes/matches found.
+            // If we have errors, we already returned 1.
+            // If we have skipped files, strictly speaking they are not "errors" but "warnings" usually.
+            // But if I asked to change files and nothing changed, exit 1 is appropriate.
+            1 
         } else {
             0
         }
@@ -117,6 +126,8 @@ impl Report {
             println!("<file path=\"{}\">", file.path.display());
             if let Some(err) = &file.error {
                 println!("ERROR: {}", err);
+            } else if let Some(reason) = &file.skipped {
+                println!("SKIPPED: {}", reason);
             } else if let Some(diff) = &file.diff {
                 println!("{}", diff);
             } else if file.modified {

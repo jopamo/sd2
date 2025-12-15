@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::model::{Pipeline, Operation, Transaction};
+use crate::model::{Pipeline, Operation, Transaction, Symlinks};
 use crate::replacer::Replacer;
 use crate::write::{write_file, stage_file, WriteOptions};
 use crate::reporter::{Report, FileResult};
@@ -187,6 +187,7 @@ fn process_text(
                 modified,
                 replacements,
                 error: None,
+                skipped: None,
                 diff,
             }
         },
@@ -195,6 +196,7 @@ fn process_text(
             modified: false,
             replacements: 0,
             error: Some(e.to_string()),
+            skipped: None,
             diff: None,
         },
     }
@@ -209,6 +211,37 @@ fn process_file(
     tm: &mut Option<TransactionManager>,
 ) -> FileResult {
     let path_buf = PathBuf::from(path);
+
+    // Check for symlinks
+    if let Ok(metadata) = fs::symlink_metadata(path) {
+        if metadata.is_symlink() {
+            match pipeline.symlinks {
+                Symlinks::Follow => {
+                    // Continue to read
+                }
+                Symlinks::Skip => {
+                    return FileResult {
+                        path: path_buf,
+                        modified: false,
+                        replacements: 0,
+                        error: None,
+                        skipped: Some("symlink".into()),
+                        diff: None,
+                    };
+                }
+                Symlinks::Error => {
+                    return FileResult {
+                        path: path_buf,
+                        modified: false,
+                        replacements: 0,
+                        error: Some("Encountered symlink with --symlinks error".into()),
+                        skipped: None,
+                        diff: None,
+                    };
+                }
+            }
+        }
+    }
     
     // Read file content
     let content_bytes = match fs::read(path) {
@@ -218,6 +251,7 @@ fn process_file(
             modified: false,
             replacements: 0,
             error: Some(e.to_string()),
+            skipped: None,
             diff: None,
         }
     };
@@ -244,6 +278,7 @@ fn process_file(
                             modified: false,
                             replacements: 0,
                             error: Some(e.to_string()),
+                            skipped: None,
                             diff: None,
                         },
                     }
@@ -255,6 +290,7 @@ fn process_file(
                             modified: false,
                             replacements: 0,
                             error: Some(e.to_string()),
+                            skipped: None,
                             diff: None,
                         };
                     }
@@ -266,6 +302,7 @@ fn process_file(
                 modified,
                 replacements,
                 error: None,
+                skipped: None,
                 diff,
             }
         },
@@ -274,6 +311,7 @@ fn process_file(
             modified: false,
             replacements: 0,
             error: Some(e.to_string()),
+            skipped: None,
             diff: None,
         },
     }

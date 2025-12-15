@@ -196,7 +196,7 @@ These should be enforced in engine/report as policy checks.
 
 ### Filesystem Behavior
 
-* [ ] **`--symlinks follow|skip|error`**
+* [x] **`--symlinks follow|skip|error`**
   **Rust notes**
 
   * use `std::fs::symlink_metadata` to detect symlink without following
