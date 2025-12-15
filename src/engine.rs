@@ -305,3 +305,198 @@ fn generate_diff(old: &str, new: &str) -> Option<String> {
     }
     Some(output)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Pipeline, Operation};
+
+    fn pipeline(dry_run: bool, validate_only: bool) -> Pipeline {
+        Pipeline {
+            dry_run,
+            validate_only,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn process_content_inner_replaces_and_counts() {
+        let mut p = pipeline(true, false);
+        let ops = vec![
+            Operation::Replace {
+                find: "world".into(),
+                with: "there".into(),
+                literal: true,
+                ignore_case: false,
+                smart_case: false,
+                word: false,
+                multiline: false,
+                dot_matches_newline: false,
+                no_unicode: false,
+                limit: 0, // 0 means unlimited
+                range: None,
+            },
+        ];
+
+        let original = "hello world\n".to_string();
+        let (modified, replacements, diff, new_content) =
+            process_content_inner(original.clone(), &ops, &p, None).unwrap();
+
+        assert!(modified);
+        assert_eq!(replacements, 1);
+        assert_eq!(new_content, "hello there\n");
+        assert!(diff.is_some());
+    }
+
+    #[test]
+    fn process_content_inner_no_change_no_diff() {
+        let p = pipeline(true, false);
+        let ops = vec![
+            Operation::Replace {
+                find: "zzz".into(),
+                with: "yyy".into(),
+                literal: true,
+                ignore_case: false,
+                smart_case: false,
+                word: false,
+                multiline: false,
+                dot_matches_newline: false,
+                no_unicode: false,
+                limit: 0,
+                range: None,
+            },
+        ];
+
+        let original = "abc\n".to_string();
+        let (modified, replacements, diff, new_content) =
+            process_content_inner(original.clone(), &ops, &p, None).unwrap();
+
+        assert!(!modified);
+        assert_eq!(replacements, 0);
+        assert_eq!(new_content, original);
+        assert!(diff.is_none());
+    }
+
+    #[test]
+    fn process_content_inner_diff_only_when_dry_run() {
+        let p = pipeline(false, false);
+        let ops = vec![
+            Operation::Replace {
+                find: "a".into(),
+                with: "b".into(),
+                literal: true,
+                ignore_case: false,
+                smart_case: false,
+                word: false,
+                multiline: false,
+                dot_matches_newline: false,
+                no_unicode: false,
+                limit: 0,
+                range: None,
+            },
+        ];
+
+        let original = "a\n".to_string();
+        let (_modified, _replacements, diff, _new_content) =
+            process_content_inner(original, &ops, &p, None).unwrap();
+
+        assert!(diff.is_none());
+    }
+
+    #[test]
+    fn generate_diff_returns_none_when_equal() {
+        assert_eq!(generate_diff("x\n", "x\n"), None);
+    }
+
+    #[test]
+    fn generate_diff_shows_insert_and_delete_markers() {
+        let d = generate_diff("a\n", "b\n").unwrap();
+        assert!(d.contains("-a"));
+        assert!(d.contains("+b"));
+    }
+
+    #[test]
+    fn filter_inputs_include_exclude_paths() {
+        let inputs = vec![
+            InputItem::Path(PathBuf::from("src/main.rs")),
+            InputItem::Path(PathBuf::from("src/lib.rs")),
+            InputItem::Path(PathBuf::from("README.md")),
+            InputItem::StdinText("hi".into()),
+        ];
+
+        let include = Some(vec!["src/*.rs".into()]);
+        let exclude = Some(vec!["*lib.rs".into()]);
+
+        let out = filter_inputs(inputs, &include, &exclude).unwrap();
+
+        // should include src/main.rs and stdin, exclude src/lib.rs, exclude README.md by include rule
+        assert_eq!(out.len(), 2);
+
+        let mut got_main = false;
+        let mut got_stdin = false;
+
+        for it in out {
+            match it {
+                InputItem::Path(p) => {
+                    if p == PathBuf::from("src/main.rs") {
+                        got_main = true;
+                    }
+                }
+                InputItem::StdinText(_) => got_stdin = true,
+                _ => {} // Ignore other variants for this test
+            }
+        }
+
+        assert!(got_main);
+        assert!(got_stdin);
+    }
+
+    #[test]
+    fn filter_inputs_invalid_glob_is_validation_error() {
+        let inputs = vec![InputItem::Path(PathBuf::from("src/main.rs"))];
+        let include = Some(vec!["[".into()]); // invalid glob
+        let err = filter_inputs(inputs, &include, &None).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Invalid glob"));
+    }
+
+    #[test]
+    fn execute_errors_when_no_inputs() {
+        let p = pipeline(true, false);
+        let err = execute(p, vec![]).unwrap_err();
+        assert!(err.to_string().contains("No input sources specified"));
+    }
+
+    #[test]
+    fn execute_errors_when_no_operations() {
+        let p = pipeline(true, false);
+        let err = execute(p, vec![InputItem::StdinText("x".into())]).unwrap_err();
+        assert!(err.to_string().contains("No operations specified"));
+    }
+
+    #[test]
+    fn execute_validate_only_forces_dry_run_and_generates_diff() {
+        let mut p = pipeline(false, true);
+        p.operations = vec![Operation::Replace {
+            find: "a".into(),
+            with: "b".into(),
+            literal: true,
+            ignore_case: false,
+            smart_case: false,
+            word: false,
+            multiline: false,
+            dot_matches_newline: false,
+            no_unicode: false,
+            limit: 0,
+            range: None,
+        }];
+
+        let report = execute(p, vec![InputItem::StdinText("a\n".into())]).unwrap();
+
+        // Check report.results via inspection or public API
+        // Here we just check one result exists
+        assert!(!report.files.is_empty());
+        let res = &report.files[0];
+        assert!(res.diff.is_some());
+    }
+}

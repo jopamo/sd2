@@ -29,7 +29,8 @@ fn parse_range(s: &str) -> Option<LineRange> {
             Some(parts[1].parse().ok()?)
         }
     } else {
-        None
+        // Single number (e.g. "40") means that specific line only (40..40)
+        Some(start)
     };
     
     Some(LineRange { start, end })

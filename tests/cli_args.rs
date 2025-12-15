@@ -6,7 +6,8 @@ use tempfile::tempdir;
 #[test]
 fn test_validate_only_no_files() {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_sd2"));
-    cmd.arg("apply")
+    cmd
+
         .arg("--validate-only")
         .arg("foo")
         .arg("bar")
@@ -22,7 +23,8 @@ fn test_validate_only_with_file_dry_run() {
     fs::write(&file_path, "hello foo world").unwrap();
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_sd2"));
-    cmd.arg("apply")
+    cmd
+
         .arg("--validate-only")
         .arg("foo")
         .arg("bar")
@@ -44,7 +46,8 @@ fn test_stdin_paths() {
     fs::write(&file_path, "hello foo world").unwrap();
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_sd2"));
-    cmd.arg("apply")
+    cmd
+
         .arg("foo")
         .arg("bar")
         .arg("--stdin-paths")
@@ -60,7 +63,8 @@ fn test_stdin_paths() {
 #[test]
 fn test_stdin_text() {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_sd2"));
-    cmd.arg("apply")
+    cmd
+
         .arg("foo")
         .arg("bar")
         .arg("--stdin-text")
@@ -80,8 +84,7 @@ fn test_files0() {
     // \0 delimiter
     let input = format!("{}\0", file_path.to_str().unwrap());
     
-    cmd.arg("apply")
-        .arg("foo")
+    cmd.arg("foo")
         .arg("bar")
         .arg("--files0")
         .write_stdin(input)
@@ -110,7 +113,8 @@ fn test_rg_json() {
     );
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_sd2"));
-    cmd.arg("apply")
+    cmd
+
         .arg("foo")
         .arg("bar")
         .arg("--rg-json")
@@ -130,7 +134,8 @@ fn test_limit_alias() {
     fs::write(&file_path, "foo foo foo").unwrap();
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_sd2"));
-    cmd.arg("apply")
+    cmd
+
         .arg("foo")
         .arg("bar")
         .arg("--limit")

@@ -342,6 +342,7 @@ mod tests {
             false, // crlf
             0,     // max_replacements
             None,
+            None,
         ).unwrap();
         let input = b"foo baz foo";
         let output = replacer.replace_with_count(input).0;
@@ -355,7 +356,18 @@ mod tests {
             "foo",
             "bar",
             true, // fixed_strings -> Should use Matcher::Literal
-            false, false, true, false, false, false, false, false, false, 0, None
+            false, // ignore_case
+            false, // smart_case
+            true,  // case_sensitive
+            false, // word_regexp
+            false, // multiline
+            false, // single_line
+            false, // dot_matches_newline
+            false, // no_unicode
+            false, // crlf
+            0,     // max_replacements
+            None,
+            None,
         ).unwrap();
         let input = b"foo baz foo";
         let output = replacer.replace_with_count(input).0;
@@ -368,7 +380,7 @@ mod tests {
         let replacer = Replacer::new(
             r"(\d+)",
             "number-$1",
-            false, false, false, true, false, false, false, false, false, false, 0, None
+            false, false, false, true, false, false, false, false, false, false, 0, None, None
         ).unwrap();
         let input = b"abc 123 def";
         let output = replacer.replace_with_count(input).0;
@@ -381,7 +393,7 @@ mod tests {
         let replacer = Replacer::new(
             "x",
             "y",
-            false, false, false, true, false, false, false, false, false, false, 2, None
+            false, false, false, true, false, false, false, false, false, false, 2, None, None
         ).unwrap();
         let input = b"x x x x";
         let output = replacer.replace_with_count(input).0;

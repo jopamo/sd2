@@ -190,6 +190,27 @@ impl Pipeline {
     }
 }
 
+impl Default for Pipeline {
+    fn default() -> Self {
+        Self {
+            files: Vec::new(),
+            operations: Vec::new(),
+            dry_run: false,
+            no_write: false,
+            require_match: false,
+            expect: None,
+            fail_on_change: false,
+            transaction: Transaction::default(),
+            symlinks: Symlinks::default(),
+            binary: BinaryFileMode::default(),
+            permissions: PermissionsMode::default(),
+            validate_only: false,
+            glob_include: None,
+            glob_exclude: None,
+        }
+    }
+}
+
 impl From<crate::cli::Transaction> for Transaction {
     fn from(item: crate::cli::Transaction) -> Self {
         match item {
