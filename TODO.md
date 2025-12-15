@@ -6,12 +6,12 @@
 * [ ] **Streaming Latency:** Verify `rg-json` input doesn't introduce blocking buffers (ensure output flows as matches are found).
 * [ ] **Quadratic Check:** Verify lines with 10k+ characters or files with 100k+ matches don't stall the engine.
 
-###2) Documentation & Contracts* [ ] **JSON Schema Reference:** Document the "Stable JSON event model" you just finalized.
+###2) Documentation & Contracts* [x] **JSON Schema Reference:** Document the "Stable JSON event model" you just finalized.
 * *Must include:* Example success payload, example error payload, enum definitions.
 
 
 * [ ] **CLI Help Text Audit:** Ensure `--help` output groups flags logically (e.g., separating "Safety Policies" from "Input Formatting").
-* [ ] **Recipe/Cookbook:** Add examples for common patterns:
+* [x] **Recipe/Cookbook:** Add examples for common patterns:
 * *“Dry run a regex replacement”*
 * *“Pipe ripgrep JSON into tool”*
 * *“Apply a bulk edit via manifest”*
@@ -44,12 +44,12 @@
 
 
 
-###5) Manifest Logic upgrades* [ ] **Manifest-level Configuration:** Allow the manifest JSON/YAML to specify:
+###5) Manifest Logic upgrades* [x] **Manifest-level Configuration:** Allow the manifest JSON/YAML to specify:
 * `"transaction_mode": "all"` (Override CLI default)
 * `"glob_include": [...]`
 
 
-* [ ] **Precedence Logic:** Implement the logic: *CLI Flags > Manifest Config > Defaults*.
+* [x] **Precedence Logic:** Implement the logic: *CLI Flags > Manifest Config > Defaults*.
 
 ---
 

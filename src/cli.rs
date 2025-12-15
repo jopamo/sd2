@@ -196,26 +196,26 @@ pub struct DefaultArgs {
     // Transaction model
     // ========================================================================
     /// Transaction model: 'all' (default) or 'file'.
-    #[arg(long = "transaction", value_enum, default_value_t = Transaction::All)]
-    pub transaction: Transaction,
+    #[arg(long = "transaction", value_enum, global = true)]
+    pub transaction: Option<Transaction>,
 
     // ========================================================================
     // Filesystem behavior
     // ========================================================================
     /// Symlink handling: 'follow' (default), 'skip', or 'error'.
-    #[arg(long = "symlinks", value_enum, default_value_t = Symlinks::Follow)]
-    pub symlinks: Symlinks,
+    #[arg(long = "symlinks", value_enum, global = true)]
+    pub symlinks: Option<Symlinks>,
 
     /// Binary file handling: 'skip' (default) or 'error'.
-    #[arg(long = "binary", value_enum, default_value_t = BinaryFileMode::Skip)]
-    pub binary: BinaryFileMode,
+    #[arg(long = "binary", value_enum, global = true)]
+    pub binary: Option<BinaryFileMode>,
 
     /// Permissions handling: 'preserve' (default) or 'fixed'.
-    #[arg(long = "permissions", value_enum, default_value_t = PermissionsMode::Preserve)]
-    pub permissions: PermissionsMode,
+    #[arg(long = "permissions", value_enum, global = true)]
+    pub permissions: Option<PermissionsMode>,
 
     /// Fixed permissions mode (e.g. 755), used if --permissions=fixed.
-    #[arg(long = "mode", value_name = "MODE")]
+    #[arg(long = "mode", value_name = "MODE", global = true)]
     pub mode: Option<String>,
 
     // ========================================================================
@@ -230,7 +230,7 @@ pub struct DefaultArgs {
     pub quiet: bool,
 
     /// Explicit output formatting.
-    #[arg(long = "format", value_enum)]
+    #[arg(long = "format", value_enum, global = true)]
     pub format: Option<OutputFormat>,
 
     /// Validate manifest and semantic checks without running.

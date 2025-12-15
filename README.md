@@ -243,9 +243,70 @@ Exit non-zero if any change would occur. Useful for CI.
 
 **Flags**
 
-* `--json`
+* `--json`: Force JSON output. See [JSON Event Schema](docs/JSON_EVENTS.md).
 * `--quiet`
 * `--format diff|summary|json|agent`
+
+---
+
+## 🍳 Cookbook (Common Patterns)
+
+### Dry Run with Regex
+
+Preview changes without modifying files.
+
+```bash
+# Preview replacing 3 digits with "NUM"
+sd2 --dry-run --regex '\d{3}' 'NUM' data.txt
+```
+
+### Targeted Edits via `ripgrep`
+
+Use `rg` to find specific matches (e.g. only in function bodies) and `sd2` to replace them using the exact spans found by `rg`.
+
+```bash
+# Find "foo" only in lines starting with "fn" and replace with "bar"
+rg --json '^fn.*foo' | sd2 --rg-json foo bar
+```
+
+### Bulk Rename via Manifest
+
+Apply complex multi-file edits transactionally.
+
+**manifest.json:**
+```json
+{
+  "files": ["src/main.rs", "src/lib.rs"],
+  "transaction": "all",
+  "operations": [
+    {
+      "type": "replace",
+      "find": "OldName",
+      "with": "NewName"
+    },
+    {
+      "type": "delete",
+      "find": "// TODO: remove me"
+    }
+  ]
+}
+```
+
+```bash
+sd2 apply --manifest manifest.json
+```
+
+### Pipeline Validation
+
+Check if a replacement would change anything without actually doing it.
+
+```bash
+# Fail if no changes would be made (ensure your regex matches)
+sd2 --require-match foo bar src/
+
+# Fail if changes WOULD be made (verify cleanliness)
+sd2 --fail-on-change --dry-run foo bar src/
+```
 
 ---
 

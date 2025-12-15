@@ -46,8 +46,9 @@ fn resolve_permissions(args: &DefaultArgs) -> Result<Option<PermissionsMode>> {
         Ok(Some(PermissionsMode::Fixed(m)))
     } else {
         match args.permissions {
-            CliPermissionsMode::Fixed => bail!("--mode <OCTAL> is required when --permissions fixed is used"),
-            CliPermissionsMode::Preserve => Ok(None), // No override / default
+            Some(CliPermissionsMode::Fixed) => bail!("--mode <OCTAL> is required when --permissions fixed is used"),
+            Some(CliPermissionsMode::Preserve) => Ok(None), // No override / default
+            None => Ok(None),
         }
     }
 }
@@ -144,9 +145,9 @@ fn try_main() -> Result<i32> {
         if args.require_match { p.require_match = true; }
         if args.expect.is_some() { p.expect = args.expect; }
         if args.fail_on_change { p.fail_on_change = true; }
-        if args.transaction != CliTransaction::All { p.transaction = args.transaction.clone().into(); } // Convert cli enum to model enum
-        if args.symlinks != CliSymlinks::Follow { p.symlinks = args.symlinks.clone().into(); } // Convert cli enum to model enum
-        if args.binary != CliBinaryFileMode::Skip { p.binary = args.binary.clone().into(); } // Convert cli enum to model enum
+        if let Some(t) = &args.transaction { p.transaction = t.clone().into(); }
+        if let Some(s) = &args.symlinks { p.symlinks = s.clone().into(); }
+        if let Some(b) = &args.binary { p.binary = b.clone().into(); }
         
         // Resolve permissions override
         if let Some(perms) = resolve_permissions(&args)? {
@@ -194,9 +195,9 @@ fn try_main() -> Result<i32> {
             require_match: args.require_match,
             expect: args.expect,
             fail_on_change: args.fail_on_change,
-            transaction: args.transaction.into(), // Convert cli enum to model enum
-            symlinks: args.symlinks.into(), // Convert cli enum to model enum
-            binary: args.binary.into(), // Convert cli enum to model enum
+            transaction: args.transaction.clone().map(Into::into).unwrap_or_default(),
+            symlinks: args.symlinks.clone().map(Into::into).unwrap_or_default(),
+            binary: args.binary.clone().map(Into::into).unwrap_or_default(),
             permissions, 
             validate_only: args.validate_only,
             glob_include: if args.glob_include.is_empty() { None } else { Some(args.glob_include) },
