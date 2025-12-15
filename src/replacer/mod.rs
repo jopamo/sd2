@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::model::LineRange;
+use crate::model::{LineRange, ReplacementRange};
 use regex::bytes::{Regex, RegexBuilder, NoExpand};
 use std::borrow::Cow;
 use memchr::memmem;
@@ -16,6 +16,7 @@ pub struct Replacer {
     replacement: Vec<u8>,
     max_replacements: usize,
     range: Option<LineRange>,
+    allowed_ranges: Option<Vec<ReplacementRange>>,
     // TODO: track validation mode (strict, warn, none)
 }
 
@@ -35,6 +36,7 @@ impl Replacer {
         _crlf: bool,
         max_replacements: usize,
         range: Option<LineRange>,
+        allowed_ranges: Option<Vec<ReplacementRange>>,
     ) -> Result<Self> {
         // 1. Validate replacement pattern for capture group references
         // Even though we don't expand by default, we might validation?
@@ -99,19 +101,14 @@ impl Replacer {
             replacement: replacement_bytes,
             max_replacements,
             range,
+            allowed_ranges,
         })
     }
 
     /// Count the number of matches in the given text.
     pub fn count_matches(&self, text: &[u8]) -> usize {
-        if self.range.is_some() {
-             // If range is set, we must iterate to check bounds
-             // This is slightly inefficient but correct
-             // We can assume replace_with_count handles the check
-             // But if this is called independently, we should implement it.
-             // For now, let's reuse logic or just implement simple count.
-             // But wait, count_matches might be used for reporting.
-             // Let's implement full check.
+        if self.range.is_some() || self.allowed_ranges.is_some() {
+             // If range filters are set, we must iterate to check bounds
              let mut count = 0;
              let line_offsets = if self.range.is_some() {
                  Some(build_line_offsets(text))
@@ -127,6 +124,11 @@ impl Replacer {
                                 continue;
                             }
                         }
+                        if let Some(allowed) = &self.allowed_ranges {
+                            if !is_in_allowed_ranges(m.start(), m.end(), allowed) {
+                                continue;
+                            }
+                        }
                         count += 1;
                     }
                 },
@@ -134,6 +136,12 @@ impl Replacer {
                      for m in memmem::find_iter(text, needle) {
                         if let Some(range) = &self.range {
                             if !is_in_range(m, range, line_offsets.as_ref().unwrap()) {
+                                continue;
+                            }
+                        }
+                        let end = m + needle.len();
+                        if let Some(allowed) = &self.allowed_ranges {
+                            if !is_in_allowed_ranges(m, end, allowed) {
                                 continue;
                             }
                         }
@@ -153,7 +161,7 @@ impl Replacer {
     /// Replace matches in text and return the replaced text along with the number of replacements performed.
     pub fn replace_with_count<'a>(&self, text: &'a [u8]) -> (Cow<'a, [u8]>, usize) {
         // If no range filter and regex replacement, use regex methods for speed
-        if self.range.is_none() {
+        if self.range.is_none() && self.allowed_ranges.is_none() {
             if let Matcher::Regex(re) = &self.matcher {
                  let matches_count = self.count_matches(text);
                  if matches_count == 0 {
@@ -203,6 +211,12 @@ impl Replacer {
                         }
                     }
 
+                    if let Some(allowed) = &self.allowed_ranges {
+                        if !is_in_allowed_ranges(m.start(), m.end(), allowed) {
+                            continue;
+                        }
+                    }
+
                     new_data.extend_from_slice(&text[last_match_end..m.start()]);
                     new_data.extend_from_slice(&self.replacement);
                     last_match_end = m.end();
@@ -221,9 +235,16 @@ impl Replacer {
                         }
                     }
 
+                    let end = m + needle.len();
+                    if let Some(allowed) = &self.allowed_ranges {
+                        if !is_in_allowed_ranges(m, end, allowed) {
+                            continue;
+                        }
+                    }
+
                     new_data.extend_from_slice(&text[last_match_end..m]);
                     new_data.extend_from_slice(&self.replacement);
-                    last_match_end = m + needle.len();
+                    last_match_end = end;
                     count += 1;
                 }
             }
@@ -272,6 +293,31 @@ fn is_in_range(byte_offset: usize, range: &LineRange, line_offsets: &[usize]) ->
         }
     }
     true
+}
+
+/// Check if a match range [start, end) overlaps with any allowed range.
+fn is_in_allowed_ranges(start: usize, end: usize, allowed: &[ReplacementRange]) -> bool {
+    // Basic check: if the match overlaps with any allowed range, we allow it.
+    // Or should it be fully contained?
+    // "rg --json" gives us the range of the match.
+    // So if we match exact ranges, we should check for containment or exact match.
+    // But rg matches might be slightly different if regex differs.
+    // Let's assume strict overlap: if the match intersects with the allowed range, we allow it.
+    // Actually, usually we want to replace exactly what rg found.
+    // But the user might provide a different regex to sd2.
+    // If sd2 finds "foo" at 10..13, and allowed is 10..13, good.
+    // If allowed is 0..100, good.
+    
+    for r in allowed {
+        // Check intersection
+        // Range A: [start, end)
+        // Range B: [r.start, r.end)
+        // Intersect if start < r.end && r.start < end
+        if start < r.end && r.start < end {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]

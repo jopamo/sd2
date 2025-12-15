@@ -7,6 +7,65 @@ pub struct LineRange {
     pub end: Option<usize>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ReplacementRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Transaction {
+    All,
+    File,
+}
+
+impl Default for Transaction {
+    fn default() -> Self {
+        Self::All
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Symlinks {
+    Follow,
+    Skip,
+    Error,
+}
+
+impl Default for Symlinks {
+    fn default() -> Self {
+        Self::Follow
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum BinaryFileMode {
+    Skip,
+    Error,
+}
+
+impl Default for BinaryFileMode {
+    fn default() -> Self {
+        Self::Skip
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionsMode {
+    Preserve,
+    Fixed,
+}
+
+impl Default for PermissionsMode {
+    fn default() -> Self {
+        Self::Preserve
+    }
+}
+
 /// A single text transformation operation.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", tag = "type")]
@@ -55,24 +114,40 @@ pub struct Pipeline {
     pub files: Vec<String>,
     /// Operations to apply to each file.
     pub operations: Vec<Operation>,
+    
+    // Safety and guarantees
     /// Dry-run mode: compute changes but don't write.
     #[serde(default)]
     pub dry_run: bool,
-    /// Create backup before modifying.
+    /// Stronger than dry-run: guarantees zero writes even if output mode changes.
     #[serde(default)]
-    pub backup: bool,
-    /// Backup file extension (default: ".bak").
+    pub no_write: bool,
+    /// Fail if zero matches are found across all inputs.
     #[serde(default)]
-    pub backup_ext: Option<String>,
-    /// Follow symbolic links.
+    pub require_match: bool,
+    /// Require exactly N total replacements across all inputs.
     #[serde(default)]
-    pub follow_symlinks: bool,
-    /// Continue on errors.
+    pub expect: Option<usize>,
+    /// Exit non-zero if any change would occur.
     #[serde(default)]
-    pub continue_on_error: bool,
+    pub fail_on_change: bool,
+
+    // Transaction model
+    #[serde(default)]
+    pub transaction: Transaction,
+
+    // Filesystem behavior
+    #[serde(default)]
+    pub symlinks: Symlinks,
+    #[serde(default)]
+    pub binary: BinaryFileMode,
+    #[serde(default)]
+    pub permissions: PermissionsMode,
+
     /// Validate manifest and semantic checks without running.
     #[serde(default)]
     pub validate_only: bool,
+    
     /// Glob patterns to include.
     #[serde(default)]
     pub glob_include: Option<Vec<String>>,
@@ -100,13 +175,54 @@ impl Pipeline {
                 range: None,
             }],
             dry_run: false,
-            backup: false,
-            backup_ext: None,
-            follow_symlinks: false,
-            continue_on_error: false,
+            no_write: false,
+            require_match: false,
+            expect: None,
+            fail_on_change: false,
+            transaction: Transaction::default(),
+            symlinks: Symlinks::default(),
+            binary: BinaryFileMode::default(),
+            permissions: PermissionsMode::default(),
             validate_only: false,
             glob_include: None,
             glob_exclude: None,
+        }
+    }
+}
+
+impl From<crate::cli::Transaction> for Transaction {
+    fn from(item: crate::cli::Transaction) -> Self {
+        match item {
+            crate::cli::Transaction::All => Transaction::All,
+            crate::cli::Transaction::File => Transaction::File,
+        }
+    }
+}
+
+impl From<crate::cli::Symlinks> for Symlinks {
+    fn from(item: crate::cli::Symlinks) -> Self {
+        match item {
+            crate::cli::Symlinks::Follow => Symlinks::Follow,
+            crate::cli::Symlinks::Skip => Symlinks::Skip,
+            crate::cli::Symlinks::Error => Symlinks::Error,
+        }
+    }
+}
+
+impl From<crate::cli::BinaryFileMode> for BinaryFileMode {
+    fn from(item: crate::cli::BinaryFileMode) -> Self {
+        match item {
+            crate::cli::BinaryFileMode::Skip => BinaryFileMode::Skip,
+            crate::cli::BinaryFileMode::Error => BinaryFileMode::Error,
+        }
+    }
+}
+
+impl From<crate::cli::PermissionsMode> for PermissionsMode {
+    fn from(item: crate::cli::PermissionsMode) -> Self {
+        match item {
+            crate::cli::PermissionsMode::Preserve => PermissionsMode::Preserve,
+            crate::cli::PermissionsMode::Fixed => PermissionsMode::Fixed,
         }
     }
 }

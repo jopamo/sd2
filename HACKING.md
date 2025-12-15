@@ -15,7 +15,7 @@
 ## Architecture & Codebase
 
 *   **Language:** Rust (Edition 2024)
-*   **Entry Point:** `src/main.rs` - Handles CLI parsing (via `clap`) and dispatching to `Schema` or `Apply` modes.
+*   **Entry Point:** `src/main.rs` - Handles CLI parsing (via `clap`) and dispatches either the default command (FIND REPLACE) or specific subcommands (`schema`, `apply`).
 *   **Core Logic:**
     *   `src/engine.rs`: Orchestrates the execution of the replacement pipeline.
     *   `src/replacer/mod.rs`: Encapsulates the regex replacement logic using the `regex` crate.
@@ -71,6 +71,21 @@
 *   **Schema Dump (for Agents):**
     ```bash
     cargo run -- schema
+    ```
+
+*   **Apply Manifest:**
+    ```bash
+    cargo run -- apply --manifest examples/manifest.json
+    ```
+
+*   **Stdin Paths (from fd):**
+    ```bash
+    fd -e rs | cargo run -- "foo" "bar"
+    ```
+
+*   **Ripgrep JSON input:**
+    ```bash
+    rg --json "TODO" | cargo run -- --rg-json "TODO" "FIXME"
     ```
 
 ## Development Conventions

@@ -7,30 +7,22 @@ use tempfile::NamedTempFile;
 /// Options for file writing.
 #[derive(Debug, Clone)]
 pub struct WriteOptions {
-    /// Create backup before replacing. If Some(ext), use that extension.
-    pub backup: Option<Option<String>>,
-    /// Do not follow symbolic links (operate on symlink itself).
+    /// If true, do not follow symbolic links (operate on symlink itself).
     pub no_follow_symlinks: bool,
 }
 
 impl Default for WriteOptions {
     fn default() -> Self {
         Self {
-            backup: None,
             no_follow_symlinks: false,
         }
     }
 }
 
-/// Write data to a file atomically with optional backup.
+/// Write data to a file atomically.
 /// Preserves file permissions and handles symbolic links according to options.
 pub fn write_file(path: &Path, data: &[u8], options: &WriteOptions) -> Result<()> {
     let target_path = resolve_symlink(path, options)?;
-
-    // Create backup if requested
-    if let Some(backup_ext) = &options.backup {
-        create_backup(&target_path, backup_ext)?;
-    }
 
     // Write atomically using a temporary file in the same directory
     let parent = target_path.parent()
@@ -69,15 +61,4 @@ fn resolve_symlink(path: &Path, options: &WriteOptions) -> Result<PathBuf> {
     }
     // Not a symlink
     Ok(path.to_path_buf())
-}
-
-/// Create a backup of the file with the given extension.
-/// If extension is None, use ".bak".
-fn create_backup(path: &Path, extension: &Option<String>) -> Result<()> {
-    let backup_path = match extension {
-        Some(ext) => path.with_extension(format!("{}.{}", path.extension().unwrap_or_default().to_string_lossy(), ext)),
-        None => path.with_extension("bak"),
-    };
-    fs::copy(path, backup_path)?;
-    Ok(())
 }

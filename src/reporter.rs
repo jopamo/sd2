@@ -101,4 +101,21 @@ impl Report {
         let json = serde_json::to_string_pretty(self).expect("Failed to serialize report");
         println!("{}", json);
     }
+
+    /// Print report in Agent-friendly XML format.
+    pub fn print_agent(&self) {
+        for file in &self.files {
+            println!("<file path=\"{}\">", file.path.display());
+            if let Some(err) = &file.error {
+                println!("ERROR: {}", err);
+            } else if let Some(diff) = &file.diff {
+                println!("{}", diff);
+            } else if file.modified {
+                 println!("(modified)");
+            } else {
+                 println!("(no changes)");
+            }
+            println!("</file>");
+        }
+    }
 }

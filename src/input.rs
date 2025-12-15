@@ -1,8 +1,8 @@
-use crate::cli::ApplyArgs;
 use crate::error::{Error, Result};
 use std::io::{self, BufRead, Read, BufReader};
 use std::path::PathBuf;
-use crate::rgjson::{RgMessage, RgKind, stream_rg_json_ndjson, RgSink};
+use crate::rgjson::{self, RgMessage, RgKind, stream_rg_json_ndjson, RgSink, DeinterleavingSink, RgData};
+use crate::model::{LineRange, ReplacementRange};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InputMode {
@@ -23,20 +23,33 @@ pub enum InputMode {
 pub enum InputItem {
     Path(PathBuf),
     StdinText(String),
-    // RgSpan { ... } // Future
+    RipgrepMatch {
+        path: PathBuf,
+        matches: Vec<ReplacementRange>,
+    },
 }
 
-pub fn resolve_input_mode(args: &ApplyArgs) -> InputMode {
-    if args.stdin_text {
+pub fn resolve_input_mode(
+    stdin_paths: bool,
+    files0: bool,
+    stdin_text: bool,
+    rg_json: bool,
+    files_arg: bool,
+    files: &Vec<PathBuf>,
+) -> InputMode {
+    if stdin_text {
         InputMode::StdinText
-    } else if args.rg_json {
+    } else if rg_json {
         InputMode::RipgrepJson
-    } else if args.files0 {
+    } else if files0 {
         InputMode::StdinPathsNul
-    } else if args.stdin_paths {
+    } else if stdin_paths {
         InputMode::StdinPathsNewline
+    } else if files_arg {
+        InputMode::Auto(files.clone())
     } else {
-        InputMode::Auto(args.files.clone())
+        // Default behavior: Auto mode
+        InputMode::Auto(files.clone())
     }
 }
 
@@ -87,39 +100,50 @@ pub fn read_stdin_text() -> Result<String> {
     Ok(buffer)
 }
 
-struct PathCollectorSink {
-    paths: Vec<PathBuf>,
-}
-
-impl RgSink for PathCollectorSink {
-    fn handle(&mut self, msg: RgMessage) -> anyhow::Result<()> {
-        match msg.kind {
-            RgKind::Begin => {
-                if let Some(data) = msg.data {
-                    if let Some(path_obj) = data.path {
-                        let os_str = path_obj.to_os_string()?;
-                        self.paths.push(PathBuf::from(os_str));
-                    }
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-}
-
-/// Read ripgrep JSON output and extract paths.
-/// Uses robust handling for bytes vs text in paths.
-pub fn read_rg_json() -> Result<Vec<PathBuf>> {
+/// Read ripgrep JSON output and extract paths and matches.
+/// Uses DeinterleavingSink to group by file.
+pub fn read_rg_json() -> Result<Vec<InputItem>> {
     let stdin = io::stdin();
     let reader = BufReader::new(stdin.lock());
-    let mut sink = PathCollectorSink { paths: Vec::new() };
+    let mut sink = DeinterleavingSink::new();
     
     stream_rg_json_ndjson(reader, &mut sink).map_err(|e| Error::Validation(format!("Failed to parse rg json: {}", e)))?;
     
-    // Deduplicate? Rg usually groups by file, but we might get multiple blocks?
-    // A simple vector is fine for now, dedup can happen later if needed.
-    sink.paths.sort();
-    sink.paths.dedup();
-    Ok(sink.paths)
+    let mut items = Vec::new();
+
+    for (path_os, events) in sink.events {
+        let path = PathBuf::from(path_os);
+        let mut matches = Vec::new();
+
+        for event in events {
+             // For each event (RgData), we extract submatches
+             // If absolute_offset is present, we can calculate absolute ranges
+             if let Some(abs_start) = event.absolute_offset {
+                 for sub in event.submatches {
+                     // sub.start/end are relative to the match text?
+                     // Usually rg submatches are relative to the line content start?
+                     // Let's assume absolute_offset is the line start.
+                     // And sub.start is offset from line start.
+                     let start = (abs_start as usize) + (sub.start as usize);
+                     let end = (abs_start as usize) + (sub.end as usize);
+                     matches.push(ReplacementRange { start, end });
+                 }
+             } else {
+                 // Fallback or warning?
+                 // If no absolute offset, we can't do safe targeted replacement reliably without re-reading file lines.
+                 // For now, skip if we can't determine range.
+             }
+        }
+        
+        // Merge overlapping or adjacent ranges?
+        // Not strictly necessary if the engine handles overlapping replacements, but good practice.
+        // For now, just pass them.
+        
+        items.push(InputItem::RipgrepMatch {
+            path,
+            matches,
+        });
+    }
+
+    Ok(items)
 }

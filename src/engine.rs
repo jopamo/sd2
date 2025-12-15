@@ -4,6 +4,7 @@ use crate::replacer::Replacer;
 use crate::write::{write_file, WriteOptions};
 use crate::reporter::{Report, FileResult};
 use crate::input::InputItem;
+use crate::model::ReplacementRange;
 use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::path::PathBuf;
@@ -34,11 +35,21 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
         match input {
             InputItem::Path(path_buf) => {
                 let path_str = path_buf.to_string_lossy().into_owned();
-                let result = process_file(&path_str, &pipeline.operations, &pipeline);
+                let result = process_file(&path_str, &pipeline.operations, &pipeline, None);
                 let has_error = result.error.is_some();
                 report.add_result(result);
 
-                if !pipeline.continue_on_error && has_error {
+                if has_error {
+                    break;
+                }
+            }
+            InputItem::RipgrepMatch { path, matches } => {
+                let path_str = path.to_string_lossy().into_owned();
+                let result = process_file(&path_str, &pipeline.operations, &pipeline, Some(&matches));
+                let has_error = result.error.is_some();
+                report.add_result(result);
+
+                if has_error {
                     break;
                 }
             }
@@ -47,7 +58,7 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
                  let has_error = result.error.is_some();
                  report.add_result(result);
                  
-                 if !pipeline.continue_on_error && has_error {
+                 if has_error {
                     break;
                 }
             }
@@ -88,28 +99,31 @@ fn filter_inputs(
 
     let mut filtered = Vec::new();
     for input in inputs {
-        match input {
-            InputItem::Path(ref p) => {
-                // Include logic: If include globs exist, must match at least one.
-                if let Some(ref set) = include_set {
-                    if !set.is_match(p) {
-                         continue;
-                    }
-                }
-                
-                // Exclude logic: If exclude globs exist, must NOT match any.
-                if let Some(ref set) = exclude_set {
-                    if set.is_match(p) {
+        let path = match input {
+            InputItem::Path(ref p) => Some(p),
+            InputItem::RipgrepMatch { ref path, .. } => Some(path),
+            InputItem::StdinText(_) => None,
+        };
+
+        if let Some(p) = path {
+            // Include logic: If include globs exist, must match at least one.
+            if let Some(ref set) = include_set {
+                if !set.is_match(p) {
                         continue;
-                    }
                 }
-                
-                filtered.push(input);
             }
-            InputItem::StdinText(_) => {
-                // Always include stdin text
-                filtered.push(input);
+            
+            // Exclude logic: If exclude globs exist, must NOT match any.
+            if let Some(ref set) = exclude_set {
+                if set.is_match(p) {
+                    continue;
+                }
             }
+            
+            filtered.push(input);
+        } else {
+            // Always include stdin text
+            filtered.push(input);
         }
     }
     Ok(filtered)
@@ -123,7 +137,7 @@ fn process_text(
     // For stdin text, we use a dummy path or "<stdin>"
     let path_buf = PathBuf::from("<stdin>");
     
-    match process_content_inner(original.clone(), operations, pipeline) {
+    match process_content_inner(original.clone(), operations, pipeline, None) {
         Ok((modified, replacements, diff, new_content)) => {
             // If not dry run (and not validate only), we print the new content to stdout
             if !pipeline.dry_run && modified {
@@ -160,6 +174,7 @@ fn process_file(
     path: &str,
     operations: &[Operation],
     pipeline: &Pipeline,
+    matches: Option<&[ReplacementRange]>,
 ) -> FileResult {
     let path_buf = PathBuf::from(path);
     
@@ -177,17 +192,15 @@ fn process_file(
     
     let original = String::from_utf8_lossy(&content_bytes).to_string();
 
-    match process_content_inner(original, operations, pipeline) {
+    match process_content_inner(original, operations, pipeline, matches) {
         Ok((modified, replacements, diff, new_content)) => {
             // Write changes if modified and not dry_run
             if modified && !pipeline.dry_run {
                 let options = WriteOptions {
-                    backup: if pipeline.backup {
-                        Some(pipeline.backup_ext.clone())
-                    } else {
-                        None
-                    },
-                    no_follow_symlinks: !pipeline.follow_symlinks,
+                    // This will be replaced by new symlink/binary/permissions logic
+                    // Currently no_follow_symlinks is the only field.
+                    // This is temporary until write::write_file is updated.
+                    no_follow_symlinks: pipeline.symlinks != crate::model::Symlinks::Follow,
                 };
                 if let Err(e) = write_file(&path_buf, new_content.as_bytes(), &options) {
                      return FileResult {
@@ -223,6 +236,7 @@ fn process_content_inner(
     original: String,
     operations: &[Operation],
     pipeline: &Pipeline,
+    matches: Option<&[ReplacementRange]>,
 ) -> Result<(bool, usize, Option<String>, String)> {
     
     // Apply each operation sequentially
@@ -249,6 +263,7 @@ fn process_content_inner(
                     false, // crlf
                     *limit,
                     range.clone(),
+                    matches.map(|m| m.to_vec()),
                 ).map_err(|e| Error::Validation(e.to_string()))?;
 
                 // Apply replacement to current string (as bytes) and count replacements
@@ -263,7 +278,7 @@ fn process_content_inner(
     }
 
     let modified = current != original;
-    let diff = if pipeline.dry_run || pipeline.backup {
+    let diff = if pipeline.dry_run {
         generate_diff(&original, &current)
     } else {
         None
