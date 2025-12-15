@@ -1,193 +1,258 @@
-sd2 0.1.0
-<Your Name or Org Here>
+# sd2 CLI Option Guide
 
-sd2 is a safe, fast replacement tool designed to complement ripgrep (rg).
-Use rg to select files and sd2 to apply deterministic replacements.
+Below is a full v1 CLI option guide for `sd2`.
 
-USAGE:
-    sd2 [OPTIONS] FIND REPLACE [PATH ...]
-    sd2 [OPTIONS] -e FIND ... REPLACE [PATH ...]
-    sd2 [OPTIONS] -f FINDFILE REPLACE [PATH ...]
-    command | sd2 [OPTIONS] FIND REPLACE
-    rg [RG_OPTIONS] -l -0 FIND [PATH ...] | sd2 [OPTIONS] --files0 FIND REPLACE
-    sd2 [OPTIONS] --help
-    sd2 [OPTIONS] --version
+## Synopsis
 
-POSITIONAL ARGUMENTS:
-    <FIND>
-        A pattern used for finding matches. By default, this is a regular
-        expression. To treat patterns as literals, use -F/--fixed-strings.
+```bash
+# Replace in explicit files
+sd2 [OPTIONS] FIND REPLACE [FILES...]
 
-        To specify a pattern beginning with a dash, use -e/--regexp or the
-        special '--' delimiter.
+# Replace in files listed on stdin (fd/rg -l output)
+fd -e rs | sd2 [OPTIONS] FIND REPLACE
+rg -l PATTERN | sd2 [OPTIONS] FIND REPLACE
 
-    <REPLACE>
-        The replacement text.
+# Targeted edits using rg JSON matches
+rg --json PATTERN | sd2 --rg-json [OPTIONS] FIND REPLACE
 
-        Capture groups may be referenced with $0, $1, $2, ... and ${1} for
-        disambiguation. Named groups may be referenced with $name and ${name}.
-        To write a literal $, use $$.
+# Agent workflow
+sd2 schema
+sd2 apply --manifest manifest.json [OPTIONS]
+```
 
-    <PATH>...
-        File paths to modify. Directories are not traversed unless --walk is
-        enabled. If no PATH is given, sd2 reads stdin text when --stdin-text
-        is enabled, otherwise it reads no input and exits with an error.
+---
 
-INPUT OPTIONS:
-    --stdin-text
-        Read input text from stdin and write the replaced text to stdout.
-        This mode does not modify files and ignores file list options.
+## Commands
 
-    --files=PATH
-        Read a list of file paths from PATH (newline-delimited). Use '-' to
-        read the list from stdin.
+### Default command: `sd2 FIND REPLACE [FILES...]`
 
-    --files0
-        Read a NUL-delimited list of file paths from stdin. This is intended
-        for interoperability with tools like rg --files -0 or rg -l -0.
+Edits the provided files, or reads file paths from stdin when no files are passed.
 
-    --rg-json
-        Read ripgrep JSON Lines input from stdin and restrict replacements to
-        files observed in rg's JSON stream.
+### `schema`
 
-        Note: In v0.1, sd2 uses rg JSON to collect file paths and does not
-        apply replacements at exact match offsets.
+Print the JSON Schema describing manifests, operations, and output events.
 
-MATCH OPTIONS:
-    -e PATTERN, --regexp=PATTERN
-        Add a find pattern. This option may be provided multiple times.
-        A file is processed if it matches at least one provided pattern.
+```bash
+sd2 schema > tools_schema.json
+```
 
-        When -e/--regexp or -f/--file is used, the positional <FIND> argument
-        is not accepted.
+### `apply --manifest FILE`
 
-    -f FINDFILE, --file=FINDFILE
-        Read find patterns from FINDFILE, one pattern per line. Empty lines
-        match everything. FINDFILE may be '-' to read patterns from stdin.
+Apply a manifest (multi-file, multi-op), with full validation and atomic commit.
 
-    -F, --fixed-strings
-        Treat all find patterns as literals instead of regular expressions.
+```bash
+sd2 apply --manifest manifest.json
+```
 
-    -s, --case-sensitive
-        Execute matching case sensitively. This is the default.
+---
 
-    -i, --ignore-case
-        Execute matching case insensitively.
+## Input modes
 
-    -S, --smart-case
-        Execute matching case insensitively if the pattern is all lowercase.
-        Otherwise, match case sensitively.
+`sd2` is strict about what stdin means.
 
-    --no-unicode
-        Disable Unicode mode in the regex engine. This may improve performance
-        for ASCII-centric patterns.
+### Auto (default)
 
-    --crlf
-        Treat CRLF (\r\n) as a line terminator (where applicable).
+If stdin is piped **and** no `FILES...` are given, stdin is treated as a list of paths (newline-delimited).
 
-REPLACE OPTIONS:
-    --strict-replace
-        Treat ambiguous or invalid capture references in <REPLACE> as an error.
+```bash
+rg -l unwrap | sd2 unwrap expect
+fd -e rs | sd2 foo bar
+```
 
-    --warn-replace
-        Emit warnings for ambiguous or invalid capture references in <REPLACE>.
+### `--stdin-paths`
 
-        (Default behavior is best-effort replacement with clear errors only for
-        known ambiguous forms like $1bad that require ${1}bad.)
+Force stdin to be interpreted as newline-delimited paths.
 
-SCOPE OPTIONS:
-    --walk
-        If any PATH arguments are directories, traverse them recursively.
-        This mode is intended for convenience, but for best performance and
-        fidelity, prefer using rg to generate the file set and pass it to sd2.
+### `--files0`
 
-    -g GLOB, --glob=GLOB
-        Include or exclude paths matched by GLOB. Precede with ! to exclude.
-        When --walk is not enabled, globs apply only to paths discovered while
-        walking directories, not to explicit file arguments.
+Read **NUL-delimited** paths from stdin (for `fd -0`, `find -print0`, etc).
 
-    -., --hidden
-        When walking directories, include hidden files and directories.
+```bash
+fd -0 -e rs | sd2 --files0 foo bar
+```
 
-    -L, --follow
-        When walking directories, follow symbolic links.
+### `--stdin-text`
 
-    -d NUM, --max-depth=NUM
-        Limit directory traversal depth when --walk is enabled.
+Treat stdin as *content* and write the transformed content to stdout (filter mode).
+No files are opened.
 
-    --max-filesize=NUM+SUFFIX?
-        Skip files larger than the given size when --walk is enabled.
+```bash
+printf '%s\n' "hello foo" | sd2 --stdin-text foo bar
+```
 
-    --no-ignore
-        When walking directories, do not respect ignore files.
+### `--rg-json`
 
-WRITE MODES:
-    --in-place
-        Modify files in place using an atomic write strategy. This is the
-        default when PATH arguments or file list options are used.
+Consume `rg --json` output from stdin and apply edits only to the matched spans.
 
-    --stdout
-        Never modify files. Write replaced content to stdout.
+```bash
+rg --json "foo" | sd2 --rg-json foo bar
+```
 
-    --preview
-        Like --stdout, but also print a per-file summary to stderr.
+Rules:
 
-    --dry-run
-        Alias for --preview.
+* no re-searching
+* edits are constrained to rg-reported match spans
+* fails if input is not rg JSON
 
-WRITE OPTIONS:
-    --backup[=EXT]
-        Create a backup file before replacing. If EXT is omitted, ".bak" is
-        used. Backups are created next to the original file.
+### `--files`
 
-    --no-backup
-        Disable backups.
+Force positional arguments to be treated as files even if stdin is present.
+Useful when a previous command in a pipeline accidentally feeds stdin.
 
-    --follow-symlinks
-        When a PATH is a symlink, operate on the target.
+---
 
-    --no-follow-symlinks
-        When a PATH is a symlink, operate on the symlink itself where possible.
+## Match semantics
 
-    --fail-fast
-        Stop after the first error.
+### Literal by default
 
-    --continue-on-error
-        Continue processing other files after an error and report all failures.
-        (Default.)
+`FIND` is treated as an exact string.
 
-OUTPUT OPTIONS:
-    --color=WHEN
-        Control when to use colors. Values: never, auto, always, ansi.
+### `--regex`
 
-    --json
-        Emit change summaries as JSON Lines on stdout (one record per file).
+Treat `FIND` as a regex pattern.
 
-    -0, --null
-        When printing file paths (e.g., in summaries), terminate them with NUL.
+```bash
+sd2 --regex 'foo\s+bar' 'baz' file.txt
+```
 
-    -q, --quiet
-        Suppress normal output. Errors are still printed.
+### Case handling
 
-    --summary
-        Print an aggregate summary to stderr at the end (files changed, matches,
-        replacements, failures).
+* `--case-sensitive` default
+* `--ignore-case`
+* `--smart-case` (case-insensitive unless `FIND` contains uppercase)
 
-LOGGING OPTIONS:
-    --debug
-        Show debug messages.
+---
 
-    --trace
-        Show trace messages.
+## Scope controls
 
-OTHER BEHAVIORS:
-    --help
-        Show this help output.
+### `--limit N`
 
-    -V, --version
-        Show version information.
+Maximum replacements per file.
 
-EXIT STATUS:
-    0  Success (and at least one file was changed, or stdin processed)
-    1  No matches / no changes (when operating on files or stdin)
-    2  Error (invalid arguments, IO errors, parse errors, write failures)
+```bash
+sd2 foo bar file.rs --limit 1
+```
+
+### `--range START[:END]`
+
+Only apply replacements in a line range (1-based).
+
+```bash
+sd2 foo bar file.rs --range 10:200
+sd2 foo bar file.rs --range 40
+```
+
+### `--glob-include GLOB`
+
+Apply edits only to files whose *path* matches the glob.
+This is not traversal logic, it’s a post-filter on the incoming file list.
+
+```bash
+fd . | sd2 foo bar --glob-include '**/*.rs'
+```
+
+### `--glob-exclude GLOB`
+
+Exclude matching paths (post-filter).
+
+---
+
+## Safety and guarantees
+
+### `--dry-run`
+
+Print a unified diff, perform no writes.
+
+```bash
+sd2 foo bar src/main.rs --dry-run
+```
+
+### `--no-write`
+
+Stronger than `--dry-run`: still does parsing, matching, planning, and validation, but guarantees zero filesystem writes even if output mode changes.
+
+### `--require-match`
+
+Fail if **zero** matches are found across all inputs.
+
+### `--expect N`
+
+Require **exactly N total replacements** across all inputs.
+If the count differs, abort and write nothing.
+
+### `--fail-on-change`
+
+Exit non-zero if any change would occur (CI assertions).
+
+---
+
+## Transaction model
+
+### `--transaction all|file`
+
+* `all` (default): stage edits and commit only if every file succeeds
+* `file`: commit each file independently (still atomic per file)
+
+---
+
+## Filesystem behavior
+
+### `--symlinks follow|skip|error`
+
+* `follow` (default): edit the target file and preserve the symlink
+* `skip`: ignore symlink paths
+* `error`: abort if any symlink is encountered
+
+### `--binary skip|error`
+
+* `skip` (default): skip binary-like files silently or with a warning event
+* `error`: abort if a binary-like file is encountered
+
+### `--permissions preserve|fixed`
+
+* `preserve` (default): preserve mode/owner where possible
+* `fixed`: write with a fixed mode (used mainly in controlled environments)
+
+---
+
+## Output control
+
+### Default output behavior
+
+* TTY: unified diff + summary
+* Pipe: JSON events (machine-friendly)
+
+### `--json`
+
+Force JSON event output even on a TTY.
+
+### `--quiet`
+
+No diff, no summary. Errors still emitted.
+
+### `--format diff|summary|json`
+
+Explicit output formatting.
+
+---
+
+## Agent/manifest options
+
+### `apply --manifest FILE`
+
+Reads and validates the manifest, runs operations, and commits atomically.
+
+Options:
+
+* `--validate-only` parse + validate + plan, no execution
+* `--dry-run` diff output for the planned changes
+* `--json` emit structured events
+
+---
+
+## Exit codes
+
+* `0` success (and no policy violations)
+* `1` operational failure (I/O, parse errors, invalid args)
+* `2` policy failure (`--require-match`, `--expect`, `--fail-on-change`)
+* `3` partial/aborted transaction (should only happen with `--transaction file`)
