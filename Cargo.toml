@@ -36,6 +36,7 @@ anyhow = "1.0.100"
 tempfile = "3.23.0"
 insta = "1.44.3"
 proptest = "1.9.0"
+walkdir = "2.5.0"
 
 [features]
 default = ["parallel"]
