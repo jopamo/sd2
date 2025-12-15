@@ -31,8 +31,12 @@ pub enum RgKind {
 #[derive(Debug, Deserialize)]
 pub struct RgData {
     pub path: Option<RgTextOrBytes>,
+    // These fields are part of the ripgrep JSON schema but not directly used by sd2's current replacement logic.
+    // Kept for schema compliance and potential future use (e.g., verbose reporting, validation).
+    #[allow(dead_code)]
     #[serde(default)]
     pub lines: Option<RgTextOrBytes>,
+    #[allow(dead_code)]
     #[serde(default)]
     pub line_number: Option<u64>,
     #[serde(default)]
@@ -43,6 +47,9 @@ pub struct RgData {
 
 #[derive(Debug, Deserialize)]
 pub struct RgSubmatch {
+    // This field is part of the ripgrep JSON schema but not directly used by sd2's current replacement logic.
+    // Kept for schema compliance and potential future use (e.g., verbose reporting, validation).
+    #[allow(dead_code)]
     #[serde(default)]
     pub m: Option<RgTextOrBytes>,
     #[serde(default)]
