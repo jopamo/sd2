@@ -4,7 +4,7 @@
   <img src=".github/sd2.png" alt="sd2 logo" width="300">
 </div>
 
-`sd2` is a next-generation **stream-oriented text processor** designed for two audiences:
+`sd2` is a **stream-oriented text processor** designed for two audiences:
 
 * **Humans** who want a safer, clearer CLI than `sed` or `awk`
 * **AI agents** that require structured inputs, deterministic behavior, and strict JSON validation
