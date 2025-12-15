@@ -7,12 +7,16 @@ use crate::input::InputItem;
 use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::path::PathBuf;
+use globset::{Glob, GlobSetBuilder};
 
 /// Execute a pipeline and produce a report.
 pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report> {
+    // Filter inputs based on glob_include and glob_exclude
+    let inputs = filter_inputs(inputs, &pipeline.glob_include, &pipeline.glob_exclude)?;
+
     // validate semantic constraints
     if inputs.is_empty() {
-         return Err(Error::Validation("No input sources specified".into()));
+         return Err(Error::Validation("No input sources specified (or all filtered out)".into()));
     }
     if pipeline.operations.is_empty() {
         return Err(Error::Validation("No operations specified".into()));
@@ -51,6 +55,64 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
     }
 
     Ok(report)
+}
+
+fn filter_inputs(
+    inputs: Vec<InputItem>,
+    include: &Option<Vec<String>>,
+    exclude: &Option<Vec<String>>,
+) -> Result<Vec<InputItem>> {
+    if include.is_none() && exclude.is_none() {
+        return Ok(inputs);
+    }
+
+    let include_set = if let Some(pats) = include {
+        let mut b = GlobSetBuilder::new();
+        for p in pats {
+            b.add(Glob::new(p).map_err(|e| Error::Validation(format!("Invalid glob '{}': {}", p, e)))?);
+        }
+        Some(b.build().map_err(|e| Error::Validation(format!("Failed to build glob set: {}", e)))?)
+    } else {
+        None
+    };
+
+    let exclude_set = if let Some(pats) = exclude {
+        let mut b = GlobSetBuilder::new();
+        for p in pats {
+             b.add(Glob::new(p).map_err(|e| Error::Validation(format!("Invalid glob '{}': {}", p, e)))?);
+        }
+        Some(b.build().map_err(|e| Error::Validation(format!("Failed to build glob set: {}", e)))?)
+    } else {
+        None
+    };
+
+    let mut filtered = Vec::new();
+    for input in inputs {
+        match input {
+            InputItem::Path(ref p) => {
+                // Include logic: If include globs exist, must match at least one.
+                if let Some(ref set) = include_set {
+                    if !set.is_match(p) {
+                         continue;
+                    }
+                }
+                
+                // Exclude logic: If exclude globs exist, must NOT match any.
+                if let Some(ref set) = exclude_set {
+                    if set.is_match(p) {
+                        continue;
+                    }
+                }
+                
+                filtered.push(input);
+            }
+            InputItem::StdinText(_) => {
+                // Always include stdin text
+                filtered.push(input);
+            }
+        }
+    }
+    Ok(filtered)
 }
 
 fn process_text(

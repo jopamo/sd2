@@ -106,6 +106,14 @@ pub struct ApplyArgs {
     #[arg(long = "range", value_name = "START[:END]")]
     pub range: Option<String>,
 
+    /// Glob patterns to include (files must match at least one include glob if specified).
+    #[arg(long = "glob-include", value_name = "GLOB")]
+    pub glob_include: Vec<String>,
+
+    /// Glob patterns to exclude (files matching any exclude glob are skipped).
+    #[arg(long = "glob-exclude", value_name = "GLOB")]
+    pub glob_exclude: Vec<String>,
+
     // ========================================================================
     // Output options
     // ========================================================================

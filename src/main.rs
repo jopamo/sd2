@@ -36,7 +36,7 @@ fn apply(args: cli::ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
     let input_mode = input::resolve_input_mode(&args);
 
     // Build pipeline from manifest or CLI args
-    let pipeline = if let Some(manifest_path) = args.manifest {
+    let mut pipeline = if let Some(manifest_path) = args.manifest {
         // Load JSON manifest
         let content = fs::read_to_string(manifest_path)?;
         let pipeline: model::Pipeline = serde_json::from_str(&content)?;
@@ -94,8 +94,19 @@ fn apply(args: cli::ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         pipeline.follow_symlinks = args.follow_symlinks;
         pipeline.continue_on_error = args.continue_on_error;
         pipeline.validate_only = args.validate_only;
+        pipeline.glob_include = if args.glob_include.is_empty() { None } else { Some(args.glob_include.clone()) };
+        pipeline.glob_exclude = if args.glob_exclude.is_empty() { None } else { Some(args.glob_exclude.clone()) };
         pipeline
     };
+    
+    // Override pipeline settings with CLI args if present (and not empty)
+    // This handles both CLI-only and Manifest modes where CLI flags should override
+    if !args.glob_include.is_empty() {
+        pipeline.glob_include = Some(args.glob_include);
+    }
+    if !args.glob_exclude.is_empty() {
+        pipeline.glob_exclude = Some(args.glob_exclude);
+    }
     
     // Collect inputs
     let mut inputs: Vec<input::InputItem> = Vec::new();

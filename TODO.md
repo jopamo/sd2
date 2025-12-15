@@ -123,7 +123,7 @@ Implement as a mutually exclusive **input-mode state machine** that is explicit 
     * either split file into lines with offsets and only allow matches in allowed line span
     * or compute line number during scan and reject matches outside range
 
-* [ ] **`--glob-include GLOB`** and **`--glob-exclude GLOB`**
+* [x] **`--glob-include GLOB`** and **`--glob-exclude GLOB`**
   **Rust notes**
 
   * treat as post-filters over the collected input file list

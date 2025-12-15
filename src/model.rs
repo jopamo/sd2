@@ -73,6 +73,12 @@ pub struct Pipeline {
     /// Validate manifest and semantic checks without running.
     #[serde(default)]
     pub validate_only: bool,
+    /// Glob patterns to include.
+    #[serde(default)]
+    pub glob_include: Option<Vec<String>>,
+    /// Glob patterns to exclude.
+    #[serde(default)]
+    pub glob_exclude: Option<Vec<String>>,
 }
 
 impl Pipeline {
@@ -99,6 +105,8 @@ impl Pipeline {
             follow_symlinks: false,
             continue_on_error: false,
             validate_only: false,
+            glob_include: None,
+            glob_exclude: None,
         }
     }
 }
