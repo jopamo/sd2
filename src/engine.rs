@@ -3,15 +3,16 @@ use crate::model::{Pipeline, Operation};
 use crate::replacer::Replacer;
 use crate::write::{write_file, WriteOptions};
 use crate::reporter::{Report, FileResult};
+use crate::input::InputItem;
 use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Execute a pipeline and produce a report.
-pub fn execute(mut pipeline: Pipeline) -> Result<Report> {
+pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report> {
     // validate semantic constraints
-    if pipeline.files.is_empty() {
-         return Err(Error::Validation("No files specified for processing".into()));
+    if inputs.is_empty() {
+         return Err(Error::Validation("No input sources specified".into()));
     }
     if pipeline.operations.is_empty() {
         return Err(Error::Validation("No operations specified".into()));
@@ -25,34 +26,62 @@ pub fn execute(mut pipeline: Pipeline) -> Result<Report> {
 
     let mut report = Report::new(pipeline.dry_run, validate_only);
 
-    for file_path in &pipeline.files {
-        let result = process_file(&file_path, &pipeline.operations, &pipeline);
-        let has_error = result.error.is_some();
-        report.add_result(result);
+    for input in inputs {
+        match input {
+            InputItem::Path(path_buf) => {
+                let path_str = path_buf.to_string_lossy().into_owned();
+                let result = process_file(&path_str, &pipeline.operations, &pipeline);
+                let has_error = result.error.is_some();
+                report.add_result(result);
 
-        // If continue_on_error is false and error occurred, break
-        if !pipeline.continue_on_error && has_error {
-            break;
+                if !pipeline.continue_on_error && has_error {
+                    break;
+                }
+            }
+            InputItem::StdinText(text) => {
+                 let result = process_text(text, &pipeline.operations, &pipeline);
+                 let has_error = result.error.is_some();
+                 report.add_result(result);
+                 
+                 if !pipeline.continue_on_error && has_error {
+                    break;
+                }
+            }
         }
     }
 
     Ok(report)
 }
 
-/// Process a single file.
-fn process_file(
-    path: &str,
+fn process_text(
+    original: String,
     operations: &[Operation],
     pipeline: &Pipeline,
 ) -> FileResult {
-    let path_buf = PathBuf::from(path);
-    match process_file_inner(&path_buf, operations, pipeline) {
-        Ok((modified, replacements, diff)) => FileResult {
-            path: path_buf,
-            modified,
-            replacements,
-            error: None,
-            diff,
+    // For stdin text, we use a dummy path or "<stdin>"
+    let path_buf = PathBuf::from("<stdin>");
+    
+    match process_content_inner(original.clone(), operations, pipeline) {
+        Ok((modified, replacements, diff, new_content)) => {
+            // If not dry run (and not validate only), we print the new content to stdout
+            if !pipeline.dry_run && modified {
+                print!("{}", new_content);
+            }
+            // If unmodified, maybe print original? 
+            // The spec says: "returns counts/diff as stdout content ... output goes to stdout"
+            // If it's a filter, it should output content. 
+            // If no changes, it should output original content.
+            if !pipeline.dry_run && !modified {
+                print!("{}", original);
+            }
+
+            FileResult {
+                path: path_buf,
+                modified,
+                replacements,
+                error: None,
+                diff,
+            }
         },
         Err(e) => FileResult {
             path: path_buf,
@@ -64,16 +93,77 @@ fn process_file(
     }
 }
 
-/// Inner processing that can fail.
-fn process_file_inner(
-    path: &Path,
+/// Process a single file.
+fn process_file(
+    path: &str,
     operations: &[Operation],
     pipeline: &Pipeline,
-) -> Result<(bool, usize, Option<String>)> {
+) -> FileResult {
+    let path_buf = PathBuf::from(path);
+    
     // Read file content
-    let content = fs::read(path)?;
-    let original = String::from_utf8_lossy(&content).to_string();
+    let content_bytes = match fs::read(path) {
+        Ok(b) => b,
+        Err(e) => return FileResult {
+            path: path_buf,
+            modified: false,
+            replacements: 0,
+            error: Some(e.to_string()),
+            diff: None,
+        }
+    };
+    
+    let original = String::from_utf8_lossy(&content_bytes).to_string();
 
+    match process_content_inner(original, operations, pipeline) {
+        Ok((modified, replacements, diff, new_content)) => {
+            // Write changes if modified and not dry_run
+            if modified && !pipeline.dry_run {
+                let options = WriteOptions {
+                    backup: if pipeline.backup {
+                        Some(pipeline.backup_ext.clone())
+                    } else {
+                        None
+                    },
+                    follow_symlinks: pipeline.follow_symlinks,
+                    no_follow_symlinks: !pipeline.follow_symlinks,
+                };
+                if let Err(e) = write_file(&path_buf, new_content.as_bytes(), &options) {
+                     return FileResult {
+                        path: path_buf,
+                        modified: false,
+                        replacements: 0,
+                        error: Some(e.to_string()),
+                        diff: None,
+                    };
+                }
+            }
+
+            FileResult {
+                path: path_buf,
+                modified,
+                replacements,
+                error: None,
+                diff,
+            }
+        },
+        Err(e) => FileResult {
+            path: path_buf,
+            modified: false,
+            replacements: 0,
+            error: Some(e.to_string()),
+            diff: None,
+        },
+    }
+}
+
+/// Inner processing logic shared between file and text input
+fn process_content_inner(
+    original: String,
+    operations: &[Operation],
+    pipeline: &Pipeline,
+) -> Result<(bool, usize, Option<String>, String)> {
+    
     // Apply each operation sequentially
     let mut current = original.clone();
     let mut total_replacements = 0;
@@ -117,23 +207,9 @@ fn process_file_inner(
         None
     };
 
-    // Write changes if modified and not dry_run
-    if modified && !pipeline.dry_run {
-        let options = WriteOptions {
-            backup: if pipeline.backup {
-                Some(pipeline.backup_ext.clone())
-            } else {
-                None
-            },
-            follow_symlinks: pipeline.follow_symlinks,
-            no_follow_symlinks: !pipeline.follow_symlinks,
-        };
-        write_file(path, current.as_bytes(), &options)?;
-    }
-
-    // TODO: compute actual replacements count from diff
-    Ok((modified, total_replacements, diff))
+    Ok((modified, total_replacements, diff, current))
 }
+
 
 /// Generate a unified diff between old and new content.
 fn generate_diff(old: &str, new: &str) -> Option<String> {

@@ -5,10 +5,11 @@ mod replacer;
 mod write;
 mod engine;
 mod reporter;
+mod input;
 
 use clap::Parser;
 use std::fs;
-use std::io::{self, BufRead};
+use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::Cli::parse();
@@ -30,6 +31,9 @@ fn print_schema() -> Result<(), Box<dyn std::error::Error>> {
 fn apply(args: cli::ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
     // Capture JSON output flag before moving args
     let json_output = args.json;
+    
+    // Resolve input mode
+    let input_mode = input::resolve_input_mode(&args);
 
     // Build pipeline from manifest or CLI args
     let pipeline = if let Some(manifest_path) = args.manifest {
@@ -41,7 +45,11 @@ fn apply(args: cli::ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         // Build from CLI arguments
         let find = args.find.expect("FIND required without manifest");
         let replace = args.replace.expect("REPLACE required without manifest");
-        let files = args.files.into_iter().map(|p| p.to_string_lossy().into_owned()).collect();
+        // Files are handled by input_mode, so we start with empty here for CLI args case
+        // But pipeline.files is expected to be populated for engine?
+        // Actually, we are separating inputs from pipeline configuration.
+        // pipeline.files will be ignored/merged into inputs.
+        let files: Vec<String> = Vec::new();
         let mut pipeline = model::Pipeline::replace(files, find, replace);
 
         // Apply CLI flags to the operation
@@ -67,17 +75,54 @@ fn apply(args: cli::ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         pipeline.validate_only = args.validate_only;
         pipeline
     };
-
-    // If no files specified, read from stdin
-    let mut pipeline = pipeline;
-    if pipeline.files.is_empty() && !atty::is(atty::Stream::Stdin) {
-        for line in io::stdin().lock().lines() {
-            pipeline.files.push(line?);
+    
+    // Collect inputs
+    let mut inputs: Vec<input::InputItem> = Vec::new();
+    
+    // 1. Add files from pipeline (manifest)
+    for f in &pipeline.files {
+        inputs.push(input::InputItem::Path(PathBuf::from(f)));
+    }
+    
+    // 2. Add inputs from InputMode
+    match input_mode {
+        input::InputMode::Auto(files) => {
+             if files.is_empty() {
+                 // Check if stdin is piped. If so, read paths from stdin.
+                 if !atty::is(atty::Stream::Stdin) {
+                     for path in input::read_paths_from_stdin()? {
+                         inputs.push(input::InputItem::Path(path));
+                     }
+                 }
+             } else {
+                 for path in files {
+                     inputs.push(input::InputItem::Path(path));
+                 }
+             }
+        }
+        input::InputMode::StdinPathsNewline => {
+             for path in input::read_paths_from_stdin()? {
+                 inputs.push(input::InputItem::Path(path));
+             }
+        }
+        input::InputMode::StdinPathsNul => {
+             for path in input::read_paths_from_stdin_zero()? {
+                 inputs.push(input::InputItem::Path(path));
+             }
+        }
+        input::InputMode::StdinText => {
+             let text = input::read_stdin_text()?;
+             inputs.push(input::InputItem::StdinText(text));
+        }
+        input::InputMode::RipgrepJson => {
+             for path in input::read_rg_json()? {
+                 inputs.push(input::InputItem::Path(path));
+             }
         }
     }
 
     // Execute pipeline
-    let report = engine::execute(pipeline)?;
+    let report = engine::execute(pipeline, inputs)?;
 
     // Output report
     if json_output {

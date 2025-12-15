@@ -43,14 +43,14 @@ These are documented but currently missing from `src/cli.rs` and/or execution lo
 
 Implement as a mutually exclusive **input-mode state machine** that is explicit and testable.
 
-* [ ] **`--stdin-paths`**
+* [x] **`--stdin-paths`**
   **Rust notes**
 
   * forces stdin to be interpreted as newline-delimited paths
   * disable auto-detection and treat piped stdin as paths even if it “looks like text”
   * implement as `InputMode::StdinPathsNewline`
 
-* [ ] **`--files0`**
+* [x] **`--files0`**
   **Rust notes**
 
   * read NUL-delimited paths from stdin
@@ -58,7 +58,7 @@ Implement as a mutually exclusive **input-mode state machine** that is explicit 
   * avoid UTF-8 assumptions on raw path bytes if you want to be fully correct, but on Linux you can usually use `OsStrExt::from_bytes`
   * mode `InputMode::StdinPathsNul`
 
-* [ ] **`--stdin-text`**
+* [x] **`--stdin-text`**
   **Rust notes**
 
   * stdin is treated as *content*, not a path list
@@ -66,7 +66,7 @@ Implement as a mutually exclusive **input-mode state machine** that is explicit 
   * returns counts/diff as stdout content + optional JSON events on stderr (or vice versa) depending on your chosen contract
   * mode `InputMode::StdinText`
 
-* [ ] **`--rg-json`**
+* [x] **`--rg-json`**
   **Rust notes**
 
   * stream parse JSON lines from stdin
@@ -77,7 +77,7 @@ Implement as a mutually exclusive **input-mode state machine** that is explicit 
     * better: accept both by base64 decoding `bytes` into `Vec<u8>` and then attempt UTF-8 for content, while keeping paths as `OsString`
   * mode `InputMode::RipgrepJson`
 
-* [ ] **`--files`**
+* [x] **`--files`**
   **Rust notes**
 
   * when stdin is piped, default behavior might auto-select stdin paths
@@ -250,7 +250,7 @@ These should be enforced in engine/report as policy checks.
 
 ### Core Engine (`src/engine.rs`, `src/replacer/mod.rs`)
 
-* [ ] **Input Mode State Machine**
+* [x] **Input Mode State Machine**
 
   * create `src/input.rs` with:
 

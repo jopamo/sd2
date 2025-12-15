@@ -1,7 +1,44 @@
+use crate::cli::ApplyArgs;
 use crate::error::{Error, Result};
 use std::io::{self, BufRead, Read};
 use std::path::PathBuf;
 use serde::Deserialize;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum InputMode {
+    /// Read paths from command line arguments.
+    /// If no args, and stdin is a pipe, read paths from stdin (newline delimited).
+    Auto(Vec<PathBuf>),
+    /// Read paths from stdin (newline delimited).
+    StdinPathsNewline,
+    /// Read paths from stdin (NUL delimited).
+    StdinPathsNul,
+    /// Read content from stdin.
+    StdinText,
+    /// Read ripgrep JSON from stdin.
+    RipgrepJson,
+}
+
+#[derive(Debug)]
+pub enum InputItem {
+    Path(PathBuf),
+    StdinText(String),
+    // RgSpan { ... } // Future
+}
+
+pub fn resolve_input_mode(args: &ApplyArgs) -> InputMode {
+    if args.stdin_text {
+        InputMode::StdinText
+    } else if args.rg_json {
+        InputMode::RipgrepJson
+    } else if args.files0 {
+        InputMode::StdinPathsNul
+    } else if args.stdin_paths {
+        InputMode::StdinPathsNewline
+    } else {
+        InputMode::Auto(args.files.clone())
+    }
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -104,6 +141,10 @@ pub fn read_paths_from_stdin_zero() -> Result<Vec<PathBuf>> {
 /// Read all text from stdin.
 pub fn read_stdin_text() -> Result<String> {
     let mut buffer = String::new();
+    // Check if stdin is tty? No, if mode is StdinText we assume they want to read from it.
+    // But if it is a TTY we might hang.
+    // However, logic usually checks atty before calling this if in Auto mode.
+    // In StdinText mode, we force read.
     io::stdin().read_to_string(&mut buffer).map_err(Error::Io)?;
     Ok(buffer)
 }
