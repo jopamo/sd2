@@ -29,19 +29,22 @@ pub struct Report {
     pub replacements: usize,
     /// Whether dry-run mode was active.
     pub dry_run: bool,
+    /// Whether validate-only mode was active.
+    pub validate_only: bool,
     /// Whether any errors occurred.
     pub has_errors: bool,
 }
 
 impl Report {
     /// Create a new empty report.
-    pub fn new(dry_run: bool) -> Self {
+    pub fn new(dry_run: bool, validate_only: bool) -> Self {
         Self {
             files: Vec::new(),
             total: 0,
             modified: 0,
             replacements: 0,
             dry_run,
+            validate_only,
             has_errors: false,
         }
     }
@@ -61,7 +64,9 @@ impl Report {
 
     /// Print report in human-readable format.
     pub fn print_human(&self) {
-        if self.dry_run {
+        if self.validate_only {
+            println!("VALIDATION RUN - No files were written.");
+        } else if self.dry_run {
             println!("DRY RUN - No files were written.");
         }
         println!("Processed {} files, modified {}, {} replacements.",

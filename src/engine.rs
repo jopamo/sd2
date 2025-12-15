@@ -8,8 +8,22 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Execute a pipeline and produce a report.
-pub fn execute(pipeline: Pipeline) -> Result<Report> {
-    let mut report = Report::new(pipeline.dry_run);
+pub fn execute(mut pipeline: Pipeline) -> Result<Report> {
+    // validate semantic constraints
+    if pipeline.files.is_empty() {
+         return Err(Error::Validation("No files specified for processing".into()));
+    }
+    if pipeline.operations.is_empty() {
+        return Err(Error::Validation("No operations specified".into()));
+    }
+
+    let validate_only = pipeline.validate_only;
+    // If validate_only is set, force dry_run to true
+    if validate_only {
+        pipeline.dry_run = true;
+    }
+
+    let mut report = Report::new(pipeline.dry_run, validate_only);
 
     for file_path in &pipeline.files {
         let result = process_file(&file_path, &pipeline.operations, &pipeline);

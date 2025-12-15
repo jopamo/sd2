@@ -61,6 +61,9 @@ pub struct Pipeline {
     /// Continue on errors.
     #[serde(default)]
     pub continue_on_error: bool,
+    /// Validate manifest and semantic checks without running.
+    #[serde(default)]
+    pub validate_only: bool,
 }
 
 impl Pipeline {
@@ -85,6 +88,7 @@ impl Pipeline {
             backup_ext: None,
             follow_symlinks: false,
             continue_on_error: false,
+            validate_only: false,
         }
     }
 }

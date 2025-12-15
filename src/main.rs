@@ -64,6 +64,7 @@ fn apply(args: cli::ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         pipeline.backup_ext = Some(args.backup_ext);
         pipeline.follow_symlinks = args.follow_symlinks;
         pipeline.continue_on_error = args.continue_on_error;
+        pipeline.validate_only = args.validate_only;
         pipeline
     };
 

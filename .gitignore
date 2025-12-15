@@ -7,3 +7,5 @@ Cargo.lock
 *.swo
 *~
 .DS_Store
+GE*.md
+CL*.md
