@@ -6,7 +6,7 @@ use crate::reporter::{Report, FileResult};
 use crate::input::InputItem;
 use similar::{ChangeTag, TextDiff};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Execute a pipeline and produce a report.
 pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report> {
