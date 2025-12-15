@@ -67,10 +67,10 @@ What’s left is mostly **structured output stability**, **consistency**, and **
 
 ### 4) Path + glob matching edge cases
 
-* [ ] Confirm and lock down what you match globs against:
+* [x] Confirm and lock down what you match globs against:
 
   * raw incoming path vs normalized relative-to-cwd
-* [ ] Add tests for:
+* [x] Add tests for:
 
   * `./path` vs `path`
   * absolute paths

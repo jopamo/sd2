@@ -8,7 +8,8 @@ use crate::model::ReplacementRange;
 use crate::transaction::TransactionManager;
 use similar::{ChangeTag, TextDiff};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf, Component};
+use std::env;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
 /// Execute a pipeline and produce a report.
@@ -38,6 +39,8 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
         None
     };
 
+    let cwd = env::current_dir().map_err(|e| Error::Validation(format!("Failed to get current directory: {}", e)))?;
+
     for input in inputs {
         // Check globs first
         let path_for_glob = match &input {
@@ -47,8 +50,9 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
         };
 
         if let Some(p) = path_for_glob {
+             let normalized = normalize_path(p, &cwd);
              if let Some(ref set) = include_set {
-                if !set.is_match(p) {
+                if !set.is_match(&normalized) {
                     // Report skipped (glob include mismatch)
                      report.add_result(FileResult {
                         path: p.to_path_buf(),
@@ -62,7 +66,7 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
                 }
              }
              if let Some(ref set) = exclude_set {
-                 if set.is_match(p) {
+                 if set.is_match(&normalized) {
                      // Report skipped (glob exclude)
                       report.add_result(FileResult {
                         path: p.to_path_buf(),
@@ -429,6 +433,30 @@ fn generate_diff(old: &str, new: &str) -> Option<String> {
         output.push_str(&format!("{}{}", sign, change));
     }
     Some(output)
+}
+
+fn normalize_path(path: &Path, cwd: &Path) -> PathBuf {
+    let path = if path.is_absolute() {
+        path.strip_prefix(cwd).unwrap_or(path)
+    } else {
+        path
+    };
+
+    let mut components = path.components();
+    let mut filtered = PathBuf::new();
+    let mut pushed = false;
+    while let Some(component) = components.next() {
+        if component == Component::CurDir {
+            continue;
+        }
+        filtered.push(component);
+        pushed = true;
+    }
+    
+    if !pushed {
+        return PathBuf::from(".");
+    }
+    filtered
 }
 
 #[cfg(test)]
