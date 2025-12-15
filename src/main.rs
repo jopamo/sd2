@@ -7,7 +7,6 @@ mod engine;
 mod reporter;
 
 use clap::Parser;
-use schemars::schema_for;
 use std::fs;
 use std::io::{self, BufRead};
 
