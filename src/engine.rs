@@ -170,7 +170,7 @@ fn process_content_inner(
     for op in operations {
         match op {
             Operation::Replace { find, with: replacement, literal, ignore_case, smart_case,
-                word, multiline, dot_matches_newline, no_unicode, limit } => {
+                word, multiline, dot_matches_newline, no_unicode, limit, range } => {
                 // Build replacer
                 let replacer = Replacer::new(
                     find,
@@ -186,6 +186,7 @@ fn process_content_inner(
                     *no_unicode,
                     false, // crlf
                     *limit,
+                    range.clone(),
                 ).map_err(|e| Error::Validation(e.to_string()))?;
 
                 // Apply replacement to current string (as bytes) and count replacements

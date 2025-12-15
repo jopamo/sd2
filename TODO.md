@@ -113,7 +113,7 @@ Implement as a mutually exclusive **input-mode state machine** that is explicit 
   * store as `Option<usize>`
   * apply per-file unless specified otherwise in manifest
 
-* [ ] **`--range START[:END]`**
+* [x] **`--range START[:END]`**
   **Rust notes**
 
   * parse into `LineRange { start: usize, end: Option<usize> }`

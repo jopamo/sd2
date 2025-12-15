@@ -1,6 +1,12 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct LineRange {
+    pub start: usize,
+    pub end: Option<usize>,
+}
+
 /// A single text transformation operation.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", tag = "type")]
@@ -35,6 +41,9 @@ pub enum Operation {
         /// Maximum number of replacements per file (0 = unlimited).
         #[serde(default)]
         limit: usize,
+        /// Only apply replacements in a line range (1-based).
+        #[serde(default)]
+        range: Option<LineRange>,
     },
     // Future operations: Delete, Insert, RegexReplace, etc.
 }
@@ -82,6 +91,7 @@ impl Pipeline {
                 dot_matches_newline: false,
                 no_unicode: false,
                 limit: 0,
+                range: None,
             }],
             dry_run: false,
             backup: false,

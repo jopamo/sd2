@@ -102,6 +102,10 @@ pub struct ApplyArgs {
     #[arg(short = 'n', long = "max-replacements", visible_alias = "limit")]
     pub max_replacements: Option<usize>,
 
+    /// Only apply replacements in a line range (1-based, START[:END]).
+    #[arg(long = "range", value_name = "START[:END]")]
+    pub range: Option<String>,
+
     // ========================================================================
     // Output options
     // ========================================================================

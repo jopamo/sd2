@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use crate::model::LineRange;
 use regex::bytes::{Regex, RegexBuilder, NoExpand};
 use std::borrow::Cow;
 use memchr::memmem;
@@ -14,6 +15,7 @@ pub struct Replacer {
     matcher: Matcher,
     replacement: Vec<u8>,
     max_replacements: usize,
+    range: Option<LineRange>,
     // TODO: track validation mode (strict, warn, none)
 }
 
@@ -32,6 +34,7 @@ impl Replacer {
         no_unicode: bool,
         _crlf: bool,
         max_replacements: usize,
+        range: Option<LineRange>,
     ) -> Result<Self> {
         // 1. Validate replacement pattern for capture group references
         // Even though we don't expand by default, we might validation?
@@ -95,11 +98,52 @@ impl Replacer {
             matcher,
             replacement: replacement_bytes,
             max_replacements,
+            range,
         })
     }
 
     /// Count the number of matches in the given text.
     pub fn count_matches(&self, text: &[u8]) -> usize {
+        if self.range.is_some() {
+             // If range is set, we must iterate to check bounds
+             // This is slightly inefficient but correct
+             // We can assume replace_with_count handles the check
+             // But if this is called independently, we should implement it.
+             // For now, let's reuse logic or just implement simple count.
+             // But wait, count_matches might be used for reporting.
+             // Let's implement full check.
+             let mut count = 0;
+             let line_offsets = if self.range.is_some() {
+                 Some(build_line_offsets(text))
+             } else {
+                 None
+             };
+
+             match &self.matcher {
+                Matcher::Regex(re) => {
+                    for m in re.find_iter(text) {
+                        if let Some(range) = &self.range {
+                            if !is_in_range(m.start(), range, line_offsets.as_ref().unwrap()) {
+                                continue;
+                            }
+                        }
+                        count += 1;
+                    }
+                },
+                Matcher::Literal(needle) => {
+                     for m in memmem::find_iter(text, needle) {
+                        if let Some(range) = &self.range {
+                            if !is_in_range(m, range, line_offsets.as_ref().unwrap()) {
+                                continue;
+                            }
+                        }
+                        count += 1;
+                     }
+                }
+             }
+             return count;
+        }
+
         match &self.matcher {
             Matcher::Regex(re) => re.find_iter(text).count(),
             Matcher::Literal(needle) => memmem::find_iter(text, needle).count(),
@@ -108,52 +152,126 @@ impl Replacer {
 
     /// Replace matches in text and return the replaced text along with the number of replacements performed.
     pub fn replace_with_count<'a>(&self, text: &'a [u8]) -> (Cow<'a, [u8]>, usize) {
-        let matches_count = self.count_matches(text);
-        if matches_count == 0 {
-            return (Cow::Borrowed(text), 0);
+        // If no range filter and regex replacement, use regex methods for speed
+        if self.range.is_none() {
+            if let Matcher::Regex(re) = &self.matcher {
+                 let matches_count = self.count_matches(text);
+                 if matches_count == 0 {
+                    return (Cow::Borrowed(text), 0);
+                 }
+                 let actual_replacements = if self.max_replacements == 0 {
+                    matches_count
+                 } else {
+                    std::cmp::min(matches_count, self.max_replacements)
+                 };
+                 if actual_replacements == 0 {
+                     return (Cow::Borrowed(text), 0);
+                 }
+                 let replaced = if self.max_replacements == 0 {
+                    re.replace_all(text, NoExpand(&self.replacement))
+                 } else {
+                    re.replacen(text, self.max_replacements, NoExpand(&self.replacement))
+                 };
+                 return (replaced, actual_replacements);
+            }
         }
 
-        let actual_replacements = if self.max_replacements == 0 {
-            matches_count
+        // Manual replacement loop required for:
+        // 1. Literal matcher (no replace_all)
+        // 2. Range filtering (must check each match)
+        
+        let mut new_data = Vec::with_capacity(text.len());
+        let mut last_match_end = 0;
+        let mut count = 0;
+        
+        let line_offsets = if self.range.is_some() {
+            Some(build_line_offsets(text))
         } else {
-            std::cmp::min(matches_count, self.max_replacements)
+            None
         };
-
-        if actual_replacements == 0 {
-            return (Cow::Borrowed(text), 0);
-        }
 
         match &self.matcher {
             Matcher::Regex(re) => {
-                // Use NoExpand to ensure replacement is treated literally
-                let replaced = if self.max_replacements == 0 {
-                    re.replace_all(text, NoExpand(&self.replacement))
-                } else {
-                    re.replacen(text, self.max_replacements, NoExpand(&self.replacement))
-                };
-                (replaced, actual_replacements)
-            },
-            Matcher::Literal(needle) => {
-                // Manual replacement for literal
-                // We can use memmem::find_iter and build result
-                let mut new_data = Vec::with_capacity(text.len()); // heuristic
-                let mut last_match_end = 0;
-                let mut count = 0;
-
-                for m in memmem::find_iter(text, needle) {
-                    if count >= actual_replacements {
+                 for m in re.find_iter(text) {
+                    if self.max_replacements > 0 && count >= self.max_replacements {
                         break;
                     }
+                    
+                    if let Some(range) = &self.range {
+                        if !is_in_range(m.start(), range, line_offsets.as_ref().unwrap()) {
+                            continue;
+                        }
+                    }
+
+                    new_data.extend_from_slice(&text[last_match_end..m.start()]);
+                    new_data.extend_from_slice(&self.replacement);
+                    last_match_end = m.end();
+                    count += 1;
+                 }
+            },
+            Matcher::Literal(needle) => {
+                for m in memmem::find_iter(text, needle) {
+                    if self.max_replacements > 0 && count >= self.max_replacements {
+                        break;
+                    }
+                    
+                    if let Some(range) = &self.range {
+                         if !is_in_range(m, range, line_offsets.as_ref().unwrap()) {
+                            continue;
+                        }
+                    }
+
                     new_data.extend_from_slice(&text[last_match_end..m]);
                     new_data.extend_from_slice(&self.replacement);
                     last_match_end = m + needle.len();
                     count += 1;
                 }
-                new_data.extend_from_slice(&text[last_match_end..]);
-                (Cow::Owned(new_data), count)
             }
         }
+
+        if count == 0 {
+            return (Cow::Borrowed(text), 0);
+        }
+
+        new_data.extend_from_slice(&text[last_match_end..]);
+        (Cow::Owned(new_data), count)
     }
+}
+
+/// Precompute line start offsets.
+/// Returns a vector where index i is the byte offset of the start of line i+1.
+fn build_line_offsets(text: &[u8]) -> Vec<usize> {
+    let mut offsets = Vec::new();
+    offsets.push(0);
+    for (i, &b) in text.iter().enumerate() {
+        if b == b'\n' {
+            offsets.push(i + 1);
+        }
+    }
+    offsets
+}
+
+/// Check if a byte offset is within the allowed line range.
+fn is_in_range(byte_offset: usize, range: &LineRange, line_offsets: &[usize]) -> bool {
+    // Find line number for byte_offset using binary search
+    // line_offsets[i] <= byte_offset < line_offsets[i+1]
+    
+    let line_idx = match line_offsets.binary_search(&byte_offset) {
+        Ok(i) => i, // Exact match means start of line i+1 (0-based idx i)
+        Err(i) => i - 1, // Insertion point is i, so it belongs to line i-1 (0-based)
+    };
+    
+    let line_number = line_idx + 1; // 1-based line number
+
+    if line_number < range.start {
+        return false;
+    }
+    if let Some(end) = range.end {
+        if line_number > end {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]
@@ -177,6 +295,7 @@ mod tests {
             false, // no_unicode
             false, // crlf
             0,     // max_replacements
+            None,
         ).unwrap();
         let input = b"foo baz foo";
         let output = replacer.replace_with_count(input).0;
@@ -190,7 +309,7 @@ mod tests {
             "foo",
             "bar",
             true, // fixed_strings -> Should use Matcher::Literal
-            false, false, true, false, false, false, false, false, false, 0
+            false, false, true, false, false, false, false, false, false, 0, None
         ).unwrap();
         let input = b"foo baz foo";
         let output = replacer.replace_with_count(input).0;
@@ -203,7 +322,7 @@ mod tests {
         let replacer = Replacer::new(
             r"(\d+)",
             "number-$1",
-            false, false, false, true, false, false, false, false, false, false, 0
+            false, false, false, true, false, false, false, false, false, false, 0, None
         ).unwrap();
         let input = b"abc 123 def";
         let output = replacer.replace_with_count(input).0;
@@ -216,7 +335,7 @@ mod tests {
         let replacer = Replacer::new(
             "x",
             "y",
-            false, false, false, true, false, false, false, false, false, false, 2
+            false, false, false, true, false, false, false, false, false, false, 2, None
         ).unwrap();
         let input = b"x x x x";
         let output = replacer.replace_with_count(input).0;

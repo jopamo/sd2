@@ -56,7 +56,7 @@ fn apply(args: cli::ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         #[allow(irrefutable_let_patterns)]
         if let model::Operation::Replace { ref mut literal, ref mut ignore_case, ref mut smart_case,
             ref mut word, ref mut multiline, ref mut dot_matches_newline,
-            ref mut no_unicode, ref mut limit, .. } = pipeline.operations[0] {
+            ref mut no_unicode, ref mut limit, ref mut range, .. } = pipeline.operations[0] {
             *literal = !args.regex;
             *ignore_case = args.ignore_case;
             *smart_case = args.smart_case;
@@ -65,6 +65,27 @@ fn apply(args: cli::ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
             *dot_matches_newline = args.dot_matches_newline;
             *no_unicode = args.no_unicode;
             *limit = args.max_replacements.unwrap_or(0);
+            
+            if let Some(r_str) = args.range {
+                let parts: Vec<&str> = r_str.split(':').collect();
+                let (start, end) = match parts.as_slice() {
+                    [s] => {
+                        let start = s.parse().map_err(|_| "Invalid range start")?;
+                        (start, Some(start))
+                    },
+                    [s, e] => {
+                        let start = s.parse().map_err(|_| "Invalid range start")?;
+                        let end = if e.is_empty() {
+                            None
+                        } else {
+                            Some(e.parse().map_err(|_| "Invalid range end")?)
+                        };
+                        (start, end)
+                    },
+                     _ => return Err("Invalid range format. Use START[:END]".into()),
+                };
+                *range = Some(model::LineRange { start, end });
+            }
         }
 
         pipeline.dry_run = args.preview;
