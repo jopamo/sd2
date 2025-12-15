@@ -141,27 +141,27 @@ Implement as a mutually exclusive **input-mode state machine** that is explicit 
 
 These should be enforced in engine/report as policy checks.
 
-* [ ] **`--no-write`**
+* [x] **`--no-write`**
   **Rust notes**
 
   * stronger than `--dry-run`
   * enforce in one place: `EngineOptions { allow_writes: bool }`
   * every write path checks `allow_writes`, not “dry-run” scattered logic
 
-* [ ] **`--require-match`**
+* [x] **`--require-match`**
   **Rust notes**
 
   * after processing all inputs (or planning), if `total_replacements == 0` return `Exit::PolicyViolation`
   * make this identical for manifest and CLI modes
 
-* [ ] **`--expect N`**
+* [x] **`--expect N`**
   **Rust notes**
 
   * validate `total_replacements == N`
   * return policy error otherwise
   * for `--transaction all`, this should be checked *before* commit
 
-* [ ] **`--fail-on-change`**
+* [x] **`--fail-on-change`**
   **Rust notes**
 
   * if `total_changes > 0`, exit non-zero even if `--dry-run`

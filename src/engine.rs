@@ -65,6 +65,23 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
         }
     }
 
+    // Policy checks
+    if pipeline.require_match && report.replacements == 0 {
+        report.policy_violation = Some("No matches found (--require-match)".into());
+    } else if let Some(expected) = pipeline.expect {
+        if report.replacements != expected {
+            report.policy_violation = Some(format!(
+                "Expected {} replacements, found {} (--expect)",
+                expected, report.replacements
+            ));
+        }
+    } else if pipeline.fail_on_change && report.modified > 0 {
+        report.policy_violation = Some(format!(
+            "Changes detected in {} files (--fail-on-change)",
+            report.modified
+        ));
+    }
+
     Ok(report)
 }
 
@@ -194,8 +211,8 @@ fn process_file(
 
     match process_content_inner(original, operations, pipeline, matches) {
         Ok((modified, replacements, diff, new_content)) => {
-            // Write changes if modified and not dry_run
-            if modified && !pipeline.dry_run {
+            // Write changes if modified and not dry_run and not no_write
+            if modified && !pipeline.dry_run && !pipeline.no_write {
                 let options = WriteOptions {
                     // This will be replaced by new symlink/binary/permissions logic
                     // Currently no_follow_symlinks is the only field.
@@ -319,27 +336,29 @@ mod tests {
         }
     }
 
+    fn op_replace(find: &str, with: &str) -> Operation {
+        Operation::Replace {
+            find: find.into(),
+            with: with.into(),
+            literal: true,
+            ignore_case: false,
+            smart_case: false,
+            word: false,
+            multiline: false,
+            dot_matches_newline: false,
+            no_unicode: false,
+            limit: 0,
+            range: None,
+        }
+    }
+
     #[test]
     fn process_content_inner_replaces_and_counts() {
-        let mut p = pipeline(true, false);
-        let ops = vec![
-            Operation::Replace {
-                find: "world".into(),
-                with: "there".into(),
-                literal: true,
-                ignore_case: false,
-                smart_case: false,
-                word: false,
-                multiline: false,
-                dot_matches_newline: false,
-                no_unicode: false,
-                limit: 0, // 0 means unlimited
-                range: None,
-            },
-        ];
+        let p = pipeline(true, false);
+        let ops = vec![op_replace("world", "there")];
 
         let original = "hello world\n".to_string();
-        let (modified, replacements, diff, new_content) =
+        let (modified, replacements, diff, new_content) = 
             process_content_inner(original.clone(), &ops, &p, None).unwrap();
 
         assert!(modified);
@@ -351,24 +370,10 @@ mod tests {
     #[test]
     fn process_content_inner_no_change_no_diff() {
         let p = pipeline(true, false);
-        let ops = vec![
-            Operation::Replace {
-                find: "zzz".into(),
-                with: "yyy".into(),
-                literal: true,
-                ignore_case: false,
-                smart_case: false,
-                word: false,
-                multiline: false,
-                dot_matches_newline: false,
-                no_unicode: false,
-                limit: 0,
-                range: None,
-            },
-        ];
+        let ops = vec![op_replace("zzz", "yyy")];
 
         let original = "abc\n".to_string();
-        let (modified, replacements, diff, new_content) =
+        let (modified, replacements, diff, new_content) = 
             process_content_inner(original.clone(), &ops, &p, None).unwrap();
 
         assert!(!modified);
@@ -380,24 +385,10 @@ mod tests {
     #[test]
     fn process_content_inner_diff_only_when_dry_run() {
         let p = pipeline(false, false);
-        let ops = vec![
-            Operation::Replace {
-                find: "a".into(),
-                with: "b".into(),
-                literal: true,
-                ignore_case: false,
-                smart_case: false,
-                word: false,
-                multiline: false,
-                dot_matches_newline: false,
-                no_unicode: false,
-                limit: 0,
-                range: None,
-            },
-        ];
+        let ops = vec![op_replace("a", "b")];
 
         let original = "a\n".to_string();
-        let (_modified, _replacements, diff, _new_content) =
+        let (_modified, _replacements, diff, _new_content) = 
             process_content_inner(original, &ops, &p, None).unwrap();
 
         assert!(diff.is_none());
@@ -429,7 +420,6 @@ mod tests {
 
         let out = filter_inputs(inputs, &include, &exclude).unwrap();
 
-        // should include src/main.rs and stdin, exclude src/lib.rs, exclude README.md by include rule
         assert_eq!(out.len(), 2);
 
         let mut got_main = false;
@@ -477,19 +467,7 @@ mod tests {
     #[test]
     fn execute_validate_only_forces_dry_run_and_generates_diff() {
         let mut p = pipeline(false, true);
-        p.operations = vec![Operation::Replace {
-            find: "a".into(),
-            with: "b".into(),
-            literal: true,
-            ignore_case: false,
-            smart_case: false,
-            word: false,
-            multiline: false,
-            dot_matches_newline: false,
-            no_unicode: false,
-            limit: 0,
-            range: None,
-        }];
+        p.operations = vec![op_replace("a", "b")];
 
         let report = execute(p, vec![InputItem::StdinText("a\n".into())]).unwrap();
 
@@ -498,5 +476,47 @@ mod tests {
         assert!(!report.files.is_empty());
         let res = &report.files[0];
         assert!(res.diff.is_some());
+    }
+
+    // Policy tests
+    #[test]
+    fn execute_require_match_fails_if_no_match() {
+        let mut p = pipeline(true, false);
+        p.require_match = true;
+        p.operations = vec![op_replace("foo", "bar")];
+        
+        let report = execute(p, vec![InputItem::StdinText("baz".into())]).unwrap();
+        
+        assert!(report.policy_violation.is_some());
+        assert!(report.policy_violation.as_ref().unwrap().contains("No matches found"));
+        assert_eq!(report.exit_code(), 2);
+    }
+
+    #[test]
+    fn execute_expect_n_fails_if_count_mismatch() {
+        let mut p = pipeline(true, false);
+        p.expect = Some(2);
+        p.operations = vec![op_replace("foo", "bar")];
+        
+        // Only 1 match
+        let report = execute(p, vec![InputItem::StdinText("foo".into())]).unwrap();
+        
+        assert!(report.policy_violation.is_some());
+        assert!(report.policy_violation.as_ref().unwrap().contains("Expected 2 replacements, found 1"));
+        assert_eq!(report.exit_code(), 2);
+    }
+
+    #[test]
+    fn execute_fail_on_change_fails_if_modified() {
+        let mut p = pipeline(true, false); // dry_run
+        p.fail_on_change = true;
+        p.operations = vec![op_replace("foo", "bar")];
+        
+        let report = execute(p, vec![InputItem::StdinText("foo".into())]).unwrap();
+        
+        assert!(report.modified > 0);
+        assert!(report.policy_violation.is_some());
+        assert!(report.policy_violation.as_ref().unwrap().contains("Changes detected"));
+        assert_eq!(report.exit_code(), 2);
     }
 }

@@ -33,6 +33,8 @@ pub struct Report {
     pub validate_only: bool,
     /// Whether any errors occurred.
     pub has_errors: bool,
+    /// Policy violation message (if any).
+    pub policy_violation: Option<String>,
 }
 
 impl Report {
@@ -46,6 +48,7 @@ impl Report {
             dry_run,
             validate_only,
             has_errors: false,
+            policy_violation: None,
         }
     }
 
@@ -64,6 +67,10 @@ impl Report {
 
     /// Print report in human-readable format.
     pub fn print_human(&self) {
+        if let Some(msg) = &self.policy_violation {
+            eprintln!("Policy Error: {}", msg);
+        }
+
         if self.validate_only {
             println!("VALIDATION RUN - No files were written.");
         } else if self.dry_run {
@@ -87,10 +94,12 @@ impl Report {
 
     /// Determine the appropriate exit code for this report.
     pub fn exit_code(&self) -> i32 {
-        if self.has_errors {
+        if self.policy_violation.is_some() {
             2
-        } else if self.modified == 0 && self.total > 0 {
+        } else if self.has_errors {
             1
+        } else if self.modified == 0 && self.total > 0 {
+            1 // No changes -> 1 (standard diff/grep behavior)
         } else {
             0
         }
