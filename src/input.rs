@@ -42,7 +42,7 @@ pub fn resolve_input_mode(args: &ApplyArgs) -> InputMode {
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
-#[allow(dead_code)] // Fields used by serde
+#[allow(dead_code)]
 pub enum RgMessage {
     #[serde(rename = "match")]
     Match {
@@ -70,16 +70,19 @@ pub enum RgMessage {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RgPath {
     pub text: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RgLines {
     pub text: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RgSubmatch {
     pub match_text: String,
     pub start: usize,
@@ -87,6 +90,7 @@ pub struct RgSubmatch {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RgStats {
     pub elapsed: RgDuration,
     pub searches: u64,
@@ -96,6 +100,7 @@ pub struct RgStats {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RgDuration {
     pub secs: u64,
     pub nanos: u64,

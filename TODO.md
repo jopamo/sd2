@@ -88,7 +88,7 @@ Implement as a mutually exclusive **input-mode state machine** that is explicit 
 
 ### Match Semantics
 
-* [ ] **`--regex`**
+* [x] **`--regex`**
   **Rust notes**
 
   * default is literal find, implement literal efficiently with `memchr`/`find` on `&str` if you want

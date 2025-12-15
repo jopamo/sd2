@@ -57,7 +57,7 @@ fn apply(args: cli::ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         if let model::Operation::Replace { ref mut literal, ref mut ignore_case, ref mut smart_case,
             ref mut word, ref mut multiline, ref mut dot_matches_newline,
             ref mut no_unicode, ref mut limit, .. } = pipeline.operations[0] {
-            *literal = args.fixed_strings;
+            *literal = !args.regex;
             *ignore_case = args.ignore_case;
             *smart_case = args.smart_case;
             *word = args.word_regexp;

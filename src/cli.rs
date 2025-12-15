@@ -66,7 +66,7 @@ pub struct ApplyArgs {
     // ========================================================================
     // Match options
     // ========================================================================
-    /// Treat pattern as regex (default).
+    /// Treat pattern as regex.
     #[arg(long = "regex", conflicts_with = "fixed_strings")]
     pub regex: bool,
 

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use tempfile::PersistError;
 
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum Error {
     #[error("Invalid regex: {0}")]
     Regex(#[from] regex::Error),

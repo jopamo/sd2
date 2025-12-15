@@ -1,22 +1,5 @@
 use crate::error::{Error, Result};
-use std::{str::CharIndices, fmt};
-
-/// Error for ambiguous capture group references.
-#[derive(Debug)]
-pub struct AmbiguousCapture {
-    pub replacement: String,
-    pub span_start: usize,
-    pub span_len: usize,
-    pub num_digits: usize,
-}
-
-impl fmt::Display for AmbiguousCapture {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Ambiguous capture group reference in replacement text")
-    }
-}
-
-impl std::error::Error for AmbiguousCapture {}
+use std::str::CharIndices;
 
 /// Validate replacement string for valid capture group references.
 /// Checks for $0, $1, $2, ..., ${1}, ${name}.
@@ -58,32 +41,10 @@ pub fn validate_replacement(replacement: &str) -> Result<()> {
     Ok(())
 }
 
-/// Span of a capture group reference in the replacement string.
-#[derive(Clone, Copy, Debug)]
-struct Span {
-    start: usize,
-    length: usize,
-}
-
-impl Span {
-    fn new(start: usize, length: usize) -> Self {
-        Self { start, length }
-    }
-
-    fn end(self) -> usize {
-        self.start + self.length
-    }
-
-    fn len(self) -> usize {
-        self.length
-    }
-}
-
 /// A capture group reference found in the replacement string.
 #[derive(Debug)]
 struct Capture<'a> {
     name: &'a str,
-    span: Span,
 }
 
 /// Iterator over capture group references in a replacement string.
@@ -101,13 +62,19 @@ impl<'a> Iterator for CaptureIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let (start, _) = self.0.find(|(_, c)| *c == '$')?;
+            let (_, c) = self.0.next()?;
+            if c != '$' {
+                continue;
+            }
 
             let remaining = self.0.as_str();
             let bytes = remaining.as_bytes();
-            let open_span = Span::new(start + 1, 0);
 
-            match bytes.first()? {
+            if bytes.is_empty() {
+                continue;
+            }
+
+            match bytes[0] {
                 b'$' => {
                     // Escaped dollar sign, skip it
                     self.0.next().unwrap();
@@ -115,7 +82,7 @@ impl<'a> Iterator for CaptureIter<'a> {
                 }
                 b'{' => {
                     // Braced reference: ${...}
-                    if let Some(cap) = parse_braced_reference(bytes, open_span) {
+                    if let Some(cap) = parse_braced_reference(bytes) {
                         // Advance iterator past the capture
                         let name_len = cap.name.len();
                         let mut consumed = 0;
@@ -131,7 +98,7 @@ impl<'a> Iterator for CaptureIter<'a> {
                 }
                 _ => {
                     // Unbraced reference: $name or $number
-                    if let Some(cap) = parse_unbraced_reference(bytes, open_span) {
+                    if let Some(cap) = parse_unbraced_reference(bytes) {
                         let name_len = cap.name.len();
                         let mut consumed = 0;
                         while consumed < name_len {
@@ -150,7 +117,7 @@ impl<'a> Iterator for CaptureIter<'a> {
 }
 
 /// Parse a braced reference: ${...}
-fn parse_braced_reference(bytes: &[u8], open_span: Span) -> Option<Capture<'_>> {
+fn parse_braced_reference(bytes: &[u8]) -> Option<Capture<'_>> {
     assert_eq!(bytes[0], b'{');
     let mut end = 1;
     while end < bytes.len() && bytes[end] != b'}' {
@@ -164,12 +131,11 @@ fn parse_braced_reference(bytes: &[u8], open_span: Span) -> Option<Capture<'_>> 
     let name = std::str::from_utf8(name_bytes).ok()?;
     Some(Capture {
         name,
-        span: Span::new(open_span.start, name.len()),
     })
 }
 
 /// Parse an unbraced reference: $name where name consists of valid characters.
-fn parse_unbraced_reference(bytes: &[u8], open_span: Span) -> Option<Capture<'_>> {
+fn parse_unbraced_reference(bytes: &[u8]) -> Option<Capture<'_>> {
     let mut end = 0;
     while end < bytes.len() && is_valid_capture_char(bytes[end]) {
         end += 1;
@@ -181,7 +147,6 @@ fn parse_unbraced_reference(bytes: &[u8], open_span: Span) -> Option<Capture<'_>
     let name = std::str::from_utf8(name_bytes).ok()?;
     Some(Capture {
         name,
-        span: Span::new(open_span.start, name.len()),
     })
 }
 

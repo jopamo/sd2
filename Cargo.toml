@@ -24,6 +24,7 @@ atty = "0.2.14"
 ignore = { version = "0.4.25", optional = true }
 memmap2 = { version = "0.9.9", optional = true }
 rayon = { version = "1.11.0", optional = true }
+memchr = "2.7.6"
 
 [dev-dependencies]
 assert_cmd = "2.1.1"

@@ -9,8 +9,6 @@ use tempfile::NamedTempFile;
 pub struct WriteOptions {
     /// Create backup before replacing. If Some(ext), use that extension.
     pub backup: Option<Option<String>>,
-    /// Follow symbolic links (operate on target).
-    pub follow_symlinks: bool,
     /// Do not follow symbolic links (operate on symlink itself).
     pub no_follow_symlinks: bool,
 }
@@ -19,7 +17,6 @@ impl Default for WriteOptions {
     fn default() -> Self {
         Self {
             backup: None,
-            follow_symlinks: false,
             no_follow_symlinks: false,
         }
     }

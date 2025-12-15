@@ -125,7 +125,6 @@ fn process_file(
                     } else {
                         None
                     },
-                    follow_symlinks: pipeline.follow_symlinks,
                     no_follow_symlinks: !pipeline.follow_symlinks,
                 };
                 if let Err(e) = write_file(&path_buf, new_content.as_bytes(), &options) {
