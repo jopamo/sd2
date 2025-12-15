@@ -244,7 +244,7 @@ These should be enforced in engine/report as policy checks.
     * else if stdout is tty, diff
     * else json
 
-* [ ] **`--format agent` (Agent-friendly output)**
+* [x] **`--format agent` (Agent-friendly output)**
   **Rust notes**
 
   * use `BufferedAgentSink` from `src/rgjson.rs`
