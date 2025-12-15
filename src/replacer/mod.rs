@@ -96,6 +96,11 @@ impl Replacer {
 
         let replacement_bytes = replacement.as_bytes().to_vec();
 
+        let mut allowed_ranges = allowed_ranges;
+        if let Some(ref mut ranges) = allowed_ranges {
+            ranges.sort();
+        }
+
         Ok(Self {
             matcher,
             replacement: replacement_bytes,
@@ -115,6 +120,8 @@ impl Replacer {
              } else {
                  None
              };
+             
+             let mut allowed_cursor = 0;
 
              match &self.matcher {
                 Matcher::Regex(re) => {
@@ -125,7 +132,7 @@ impl Replacer {
                             }
                         }
                         if let Some(allowed) = &self.allowed_ranges {
-                            if !is_in_allowed_ranges(m.start(), m.end(), allowed) {
+                            if !check_allowed_range_optimized(m.start(), m.end(), allowed, &mut allowed_cursor) {
                                 continue;
                             }
                         }
@@ -141,7 +148,7 @@ impl Replacer {
                         }
                         let end = m + needle.len();
                         if let Some(allowed) = &self.allowed_ranges {
-                            if !is_in_allowed_ranges(m, end, allowed) {
+                            if !check_allowed_range_optimized(m, end, allowed, &mut allowed_cursor) {
                                 continue;
                             }
                         }
@@ -197,6 +204,8 @@ impl Replacer {
         } else {
             None
         };
+        
+        let mut allowed_cursor = 0;
 
         match &self.matcher {
             Matcher::Regex(re) => {
@@ -212,7 +221,7 @@ impl Replacer {
                     }
 
                     if let Some(allowed) = &self.allowed_ranges {
-                        if !is_in_allowed_ranges(m.start(), m.end(), allowed) {
+                        if !check_allowed_range_optimized(m.start(), m.end(), allowed, &mut allowed_cursor) {
                             continue;
                         }
                     }
@@ -237,7 +246,7 @@ impl Replacer {
 
                     let end = m + needle.len();
                     if let Some(allowed) = &self.allowed_ranges {
-                        if !is_in_allowed_ranges(m, end, allowed) {
+                        if !check_allowed_range_optimized(m, end, allowed, &mut allowed_cursor) {
                             continue;
                         }
                     }
@@ -295,28 +304,29 @@ fn is_in_range(byte_offset: usize, range: &LineRange, line_offsets: &[usize]) ->
     true
 }
 
-/// Check if a match range [start, end) overlaps with any allowed range.
-fn is_in_allowed_ranges(start: usize, end: usize, allowed: &[ReplacementRange]) -> bool {
-    // Basic check: if the match overlaps with any allowed range, we allow it.
-    // Or should it be fully contained?
-    // "rg --json" gives us the range of the match.
-    // So if we match exact ranges, we should check for containment or exact match.
-    // But rg matches might be slightly different if regex differs.
-    // Let's assume strict overlap: if the match intersects with the allowed range, we allow it.
-    // Actually, usually we want to replace exactly what rg found.
-    // But the user might provide a different regex to sd2.
-    // If sd2 finds "foo" at 10..13, and allowed is 10..13, good.
-    // If allowed is 0..100, good.
-    
-    for r in allowed {
-        // Check intersection
-        // Range A: [start, end)
-        // Range B: [r.start, r.end)
-        // Intersect if start < r.end && r.start < end
-        if start < r.end && r.start < end {
-            return true;
-        }
+/// Optimized check for allowed ranges using a cursor.
+/// Assumes matches are processed in order and allowed ranges are sorted by start.
+fn check_allowed_range_optimized(start: usize, end: usize, allowed: &[ReplacementRange], cursor: &mut usize) -> bool {
+    // Fast forward cursor: skip ranges that end before the match starts.
+    while *cursor < allowed.len() && allowed[*cursor].end <= start {
+        *cursor += 1;
     }
+
+    if *cursor >= allowed.len() {
+        return false;
+    }
+
+    let r = &allowed[*cursor];
+    // Check intersection: start < r.end && r.start < end
+    // We know r.end > start (from loop).
+    // So we just need r.start < end.
+    if r.start < end {
+        return true;
+    }
+
+    // No overlap.
+    // Since allowed ranges are sorted by start, any subsequent range r' will have r'.start >= r.start >= end.
+    // So no future overlap is possible for this match.
     false
 }
 
@@ -398,5 +408,29 @@ mod tests {
         let input = b"x x x x";
         let output = replacer.replace_with_count(input).0;
         assert_eq!(&output[..], b"y y x x");
+    }
+
+    #[test]
+    fn test_allowed_ranges_optimization() {
+        use crate::model::ReplacementRange;
+        // Allowed ranges: [0..1], [4..5] (matches 0th and 2nd 'x')
+        // Input: "x x x"
+        // Indices: 0, 2, 4
+        let allowed = vec![
+            ReplacementRange { start: 4, end: 5 },
+            ReplacementRange { start: 0, end: 1 },
+        ]; // Unsorted to test sorting
+        
+        let replacer = Replacer::new(
+            "x",
+            "y",
+            false, false, false, true, false, false, false, false, false, false, 0, None, 
+            Some(allowed)
+        ).unwrap();
+        
+        let input = b"x x x";
+        let (output, count) = replacer.replace_with_count(input);
+        assert_eq!(count, 2);
+        assert_eq!(&output[..], b"y x y");
     }
 }

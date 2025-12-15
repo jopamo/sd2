@@ -6,6 +6,7 @@ use crate::reporter::{Report, FileResult};
 use crate::input::InputItem;
 use crate::model::ReplacementRange;
 use crate::transaction::TransactionManager;
+use crate::policy::{PolicyEnforcer, enforce_pre_execution};
 use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::path::{Path, PathBuf, Component};
@@ -27,13 +28,10 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
     // Build glob sets
     let (include_set, exclude_set) = build_glob_sets(&pipeline.glob_include, &pipeline.glob_exclude)?;
 
-    let validate_only = pipeline.validate_only;
-    // If validate_only is set, force dry_run to true
-    if validate_only {
-        pipeline.dry_run = true;
-    }
+    enforce_pre_execution(&mut pipeline);
+    let enforcer = PolicyEnforcer::new(&pipeline);
 
-    let mut report = Report::new(pipeline.dry_run, validate_only);
+    let mut report = Report::new(pipeline.dry_run, pipeline.validate_only);
 
     let mut tm = if pipeline.transaction == Transaction::All {
         Some(TransactionManager::new())
@@ -42,7 +40,7 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
     };
 
     let cwd = env::current_dir().map_err(|e| Error::Validation(format!("Failed to get current directory: {}", e)))?;
-    let should_stage = pipeline.transaction == Transaction::All;
+
 
     // Define the processing function (closure)
     let process_item = |input: InputItem| -> (FileResult, Option<StagedEntry>) {
@@ -88,11 +86,11 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
         match input {
             InputItem::Path(path_buf) => {
                 let path_str = path_buf.to_string_lossy().into_owned();
-                process_file(&path_str, &pipeline.operations, &pipeline, None, should_stage)
+                process_file(&path_str, &pipeline.operations, &pipeline, None, &enforcer)
             }
             InputItem::RipgrepMatch { path, matches } => {
                 let path_str = path.to_string_lossy().into_owned();
-                process_file(&path_str, &pipeline.operations, &pipeline, Some(&matches), should_stage)
+                process_file(&path_str, &pipeline.operations, &pipeline, Some(&matches), &enforcer)
             }
             InputItem::StdinText(text) => {
                  let result = process_text(text, &pipeline.operations, &pipeline);
@@ -125,24 +123,10 @@ pub fn execute(mut pipeline: Pipeline, inputs: Vec<InputItem>) -> Result<Report>
     }
 
     // Policy checks
-    if pipeline.require_match && report.replacements == 0 {
-        report.policy_violation = Some("No matches found (--require-match)".into());
-    } else if let Some(expected) = pipeline.expect {
-        if report.replacements != expected {
-            report.policy_violation = Some(format!(
-                "Expected {} replacements, found {} (--expect)",
-                expected, report.replacements
-            ));
-        }
-    } else if pipeline.fail_on_change && report.modified > 0 {
-        report.policy_violation = Some(format!(
-            "Changes detected in {} files (--fail-on-change)",
-            report.modified
-        ));
-    }
+    enforcer.enforce_post_run(&mut report);
 
     // Commit if no errors and no policy violations
-    if report.exit_code() == 0 {
+    if enforcer.should_commit(&report) {
         if let Some(manager) = tm {
             manager.commit().map_err(|e| Error::TransactionFailure(e.to_string()))?;
         }
@@ -230,7 +214,7 @@ fn process_file(
     operations: &[Operation],
     pipeline: &Pipeline,
     matches: Option<&[ReplacementRange]>,
-    should_stage: bool,
+    enforcer: &PolicyEnforcer,
 ) -> (FileResult, Option<StagedEntry>) {
     let path_buf = PathBuf::from(path);
 
@@ -313,14 +297,14 @@ fn process_file(
 
     match process_content_inner(original, operations, pipeline, matches) {
         Ok((modified, replacements, diff, new_content)) => {
-            // Write changes if modified and not dry_run and not no_write
-            if modified && !pipeline.dry_run && !pipeline.no_write {
+            // Write changes if policy allows
+            if enforcer.can_write(modified) {
                 let options = WriteOptions {
                     no_follow_symlinks: pipeline.symlinks != crate::model::Symlinks::Follow,
                     permissions: pipeline.permissions.clone(),
                 };
                 
-                if should_stage {
+                if enforcer.should_stage() {
                     // Stage
                     match stage_file(&path_buf, new_content.as_bytes(), &options) {
                         Ok(staged) => (FileResult {

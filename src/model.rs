@@ -7,7 +7,7 @@ pub struct LineRange {
     pub end: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ReplacementRange {
     pub start: usize,
     pub end: usize,

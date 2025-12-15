@@ -14,6 +14,7 @@ mod events;
 mod exit_codes;
 mod input;
 mod model;
+mod policy;
 mod replacer;
 mod reporter;
 mod rgjson;

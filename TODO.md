@@ -103,21 +103,21 @@ What’s left is mostly **structured output stability**, **consistency**, and **
 
 ### 7) Refactor: one “policy enforcement” chokepoint
 
-* [ ] Ensure policies are enforced from exactly the correct lifecycle points:
+* [x] Ensure policies are enforced from exactly the correct lifecycle points:
 
   * validate-only: after plan, before any stage/write
   * transaction all: after staging and before commit
   * transaction file: after per-file apply or at end (depending on policy)
-* [ ] Avoid policy logic leaking into reporter and engine separately (single authoritative function)
+* [x] Avoid policy logic leaking into reporter and engine separately (single authoritative function)
 
 ### 8) Performance sanity checks
 
-* [ ] Add a small benchmark or at least stress tests for:
+* [x] Add a small benchmark or at least stress tests for:
 
   * large files
   * many files (transaction all staging)
   * rg-json streaming inputs
-* [ ] Confirm match scanning doesn’t do accidental quadratic work (especially with line/range mapping)
+* [x] Confirm match scanning doesn’t do accidental quadratic work (especially with line/range mapping)
 
 ---
 
