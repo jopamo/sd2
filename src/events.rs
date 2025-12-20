@@ -13,7 +13,7 @@ pub enum Event {
 pub struct RunStart {
     pub schema_version: String,
     pub tool_version: String,
-    pub mode: String, // "cli" or "apply"
+    pub mode: String,             // "cli" or "apply"
     pub input_mode: String, // "args", "stdin-paths", "stdin-text", "rg-json", "files0", "manifest"
     pub transaction_mode: String, // "all" or "file"
     pub dry_run: bool,
@@ -95,7 +95,7 @@ mod tests {
         // Other variant (untagged)
         let r = SkipReason::Other("custom reason".into());
         assert_eq!(serde_json::to_string(&r).unwrap(), "\"custom reason\"");
-        
+
         // Edge case: string that matches a variant name
         // Because of the order and 'untagged', deserialization might prefer the explicit variant if it matches?
         // But for serialization, it should just be the string.

@@ -24,11 +24,11 @@ fn test_rg_l_integration() {
     // 3. Run stedi using the output from rg
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("unwrap()")
-       .arg("expect(\"safe\")")
-       .write_stdin(rg_output.stdout)
-       .current_dir(dir.path()) // Important so stedi finds the file by relative path if rg output is relative
-       .assert()
-       .success();
+        .arg("expect(\"safe\")")
+        .write_stdin(rg_output.stdout)
+        .current_dir(dir.path()) // Important so stedi finds the file by relative path if rg output is relative
+        .assert()
+        .success();
 
     // 4. Verify content
     let content = fs::read_to_string(&file_path).unwrap();
@@ -40,12 +40,12 @@ fn test_rg_json_integration() {
     // 1. Setup
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("messy.rs");
-    // Messy content: multiple unwraps, some inside strings (which rg might match depending on pattern, but stedi replacer logic usually replaces everything unless scoped. 
-    // BUT --rg-json mode means stedi receives specific ranges. 
+    // Messy content: multiple unwraps, some inside strings (which rg might match depending on pattern, but stedi replacer logic usually replaces everything unless scoped.
+    // BUT --rg-json mode means stedi receives specific ranges.
     // If rg matches "unwrap" inside a string, stedi will replace it if we pass "unwrap" as FIND.
     // However, the power of --rg-json is we can use rg's smarts (e.g. rust grammar if rg supported it, or just precise context).
     // Let's test that stedi *only* touches what rg reports.
-    
+
     let content = r#" 
 fn main() {
     let x = option.unwrap();
@@ -56,8 +56,8 @@ fn main() {
     fs::write(&file_path, content).unwrap();
 
     // 2. Run rg --json
-    // We search for "unwrap" but only matching word boundary to avoid "unwrap" in string if possible? 
-    // rg doesn't know rust grammar by default. 
+    // We search for "unwrap" but only matching word boundary to avoid "unwrap" in string if possible?
+    // rg doesn't know rust grammar by default.
     // Let's just search for "unwrap" and see if stedi replaces ALL of them if rg reports ALL of them.
     // To prove targetedness, we can construct a scenario where rg *skips* one but stedi would match it if it scanned the file.
     // Example: rg search for "unwrap" but restricted to line 3.
@@ -67,10 +67,10 @@ fn main() {
     // So `stedi` will ONLY replace if:
     // 1. The text matches `FIND` (as regex/literal)
     // 2. AND the text is within the ranges reported by rg.
-    
-    // So if we have "unwrap" twice, and rg only reports one (e.g. because we grepped for `let x.*unwrap`), 
+
+    // So if we have "unwrap" twice, and rg only reports one (e.g. because we grepped for `let x.*unwrap`),
     // stedi should only replace that one.
-    
+
     let rg_output = StdCommand::new("/usr/bin/rg")
         .arg("--json")
         .arg("let x.*unwrap") // Only matches the first line
@@ -83,7 +83,7 @@ fn main() {
     // 3. Run stedi --rg-json
     // We want to replace "unwrap" with "expect"
     // The rg match is "let x = option.unwrap();" (the whole line matches the pattern)
-    // The rg json will contain a submatch for the whole match? 
+    // The rg json will contain a submatch for the whole match?
     // Wait, rg json `submatches` usually contains the match of the pattern.
     // If pattern is "let x.*unwrap", the match is that whole string.
     // stedi receives that range.
@@ -91,22 +91,22 @@ fn main() {
     // stedi will search for "unwrap" *within* the range "let x = option.unwrap();".
     // It will find it and replace it.
     // It will NOT replace the "unwrap" on the z line because rg didn't report that line.
-    
+
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("--rg-json")
-       .arg("unwrap")
-       .arg("expect")
-       .write_stdin(rg_output.stdout)
-       .current_dir(dir.path())
-       .assert()
-       .success();
+        .arg("unwrap")
+        .arg("expect")
+        .write_stdin(rg_output.stdout)
+        .current_dir(dir.path())
+        .assert()
+        .success();
 
     // 4. Verify
     let new_content = fs::read_to_string(&file_path).unwrap();
     // Line 3 (x) should change.
     // Line 5 (z) should NOT change, even though it contains "unwrap", because rg didn't match it.
     assert!(new_content.contains("let x = option.expect();"));
-    assert!(new_content.contains("let z = option.unwrap();")); 
+    assert!(new_content.contains("let z = option.unwrap();"));
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn test_rg_json_messy_utf8() {
     // 1. Setup
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("unicode.rs");
-    let content = "fn main() { v.unwrap(); // 🦀 }"; 
+    let content = "fn main() { v.unwrap(); // 🦀 }";
     fs::write(&file_path, content).unwrap();
 
     // 2. Run rg --json
@@ -128,12 +128,12 @@ fn test_rg_json_messy_utf8() {
     // 3. Run stedi
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("--rg-json")
-       .arg("unwrap")
-       .arg("expect")
-       .write_stdin(rg_output.stdout)
-       .current_dir(dir.path())
-       .assert()
-       .success();
+        .arg("unwrap")
+        .arg("expect")
+        .write_stdin(rg_output.stdout)
+        .current_dir(dir.path())
+        .assert()
+        .success();
 
     // 4. Verify
     let new_content = fs::read_to_string(&file_path).unwrap();
@@ -165,11 +165,11 @@ fn test_real_world_engine_rs() {
 
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("Pipeline")
-       .arg("PipeLine")
-       .write_stdin(rg_output.stdout)
-       .current_dir(dir.path())
-       .assert()
-       .success();
+        .arg("PipeLine")
+        .write_stdin(rg_output.stdout)
+        .current_dir(dir.path())
+        .assert()
+        .success();
 
     let content = fs::read_to_string(&file_path).unwrap();
     assert!(content.contains("PipeLine"));
@@ -188,12 +188,12 @@ fn test_real_world_engine_rs() {
 
     let mut cmd2 = cargo_bin_cmd!("stedi");
     cmd2.arg("--rg-json")
-       .arg("InputItem")
-       .arg("InItem")
-       .write_stdin(rg_json_output.stdout)
-       .current_dir(dir.path())
-       .assert()
-       .success();
+        .arg("InputItem")
+        .arg("InItem")
+        .write_stdin(rg_json_output.stdout)
+        .current_dir(dir.path())
+        .assert()
+        .success();
 
     let content_final = fs::read_to_string(&file_path).unwrap();
     assert!(content_final.contains("use crate::input::InItem;"));

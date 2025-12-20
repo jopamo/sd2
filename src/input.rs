@@ -1,8 +1,8 @@
 use crate::error::{Error, Result};
-use std::io::{self, BufRead, Read, BufReader};
-use std::path::PathBuf;
-use crate::rgjson::{stream_rg_json_ndjson, DeinterleavingSink};
 use crate::model::ReplacementRange;
+use crate::rgjson::{DeinterleavingSink, stream_rg_json_ndjson};
+use std::io::{self, BufRead, BufReader, Read};
+use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InputMode {
@@ -72,7 +72,7 @@ pub fn read_paths_from_stdin_zero() -> Result<Vec<PathBuf>> {
     let mut handle = stdin.lock();
     let mut paths = Vec::new();
     let mut buf = Vec::new();
-    
+
     // read_until includes the delimiter
     while handle.read_until(0, &mut buf).map_err(Error::Io)? > 0 {
         // Remove the trailing NUL
@@ -80,9 +80,9 @@ pub fn read_paths_from_stdin_zero() -> Result<Vec<PathBuf>> {
             buf.pop();
         }
         if !buf.is_empty() {
-             let s = String::from_utf8(buf.clone())
+            let s = String::from_utf8(buf.clone())
                 .map_err(|e| Error::Validation(format!("Invalid UTF-8 in path: {}", e)))?;
-             paths.push(PathBuf::from(s));
+            paths.push(PathBuf::from(s));
         }
         buf.clear();
     }
@@ -106,9 +106,10 @@ pub fn read_rg_json() -> Result<Vec<InputItem>> {
     let stdin = io::stdin();
     let reader = BufReader::new(stdin.lock());
     let mut sink = DeinterleavingSink::new();
-    
-    stream_rg_json_ndjson(reader, &mut sink).map_err(|e| Error::Validation(format!("Failed to parse rg json: {}", e)))?;
-    
+
+    stream_rg_json_ndjson(reader, &mut sink)
+        .map_err(|e| Error::Validation(format!("Failed to parse rg json: {}", e)))?;
+
     let mut items = Vec::new();
 
     for (path_os, events) in sink.events {
@@ -116,33 +117,30 @@ pub fn read_rg_json() -> Result<Vec<InputItem>> {
         let mut matches = Vec::new();
 
         for event in events {
-             // For each event (RgData), we extract submatches
-             // If absolute_offset is present, we can calculate absolute ranges
-             if let Some(abs_start) = event.absolute_offset {
-                 for sub in event.submatches {
-                     // sub.start/end are relative to the match text?
-                     // Usually rg submatches are relative to the line content start?
-                     // Let's assume absolute_offset is the line start.
-                     // And sub.start is offset from line start.
-                     let start = (abs_start as usize) + (sub.start as usize);
-                     let end = (abs_start as usize) + (sub.end as usize);
-                     matches.push(ReplacementRange { start, end });
-                 }
-             } else {
-                 // Fallback or warning?
-                 // If no absolute offset, we can't do safe targeted replacement reliably without re-reading file lines.
-                 // For now, skip if we can't determine range.
-             }
+            // For each event (RgData), we extract submatches
+            // If absolute_offset is present, we can calculate absolute ranges
+            if let Some(abs_start) = event.absolute_offset {
+                for sub in event.submatches {
+                    // sub.start/end are relative to the match text?
+                    // Usually rg submatches are relative to the line content start?
+                    // Let's assume absolute_offset is the line start.
+                    // And sub.start is offset from line start.
+                    let start = (abs_start as usize) + (sub.start as usize);
+                    let end = (abs_start as usize) + (sub.end as usize);
+                    matches.push(ReplacementRange { start, end });
+                }
+            } else {
+                // Fallback or warning?
+                // If no absolute offset, we can't do safe targeted replacement reliably without re-reading file lines.
+                // For now, skip if we can't determine range.
+            }
         }
-        
+
         // Merge overlapping or adjacent ranges?
         // Not strictly necessary if the engine handles overlapping replacements, but good practice.
         // For now, just pass them.
-        
-        items.push(InputItem::RipgrepMatch {
-            path,
-            matches,
-        });
+
+        items.push(InputItem::RipgrepMatch { path, matches });
     }
 
     Ok(items)

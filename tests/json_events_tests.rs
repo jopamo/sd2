@@ -6,8 +6,9 @@ fn run_stedi_json(args: &[&str]) -> Vec<Value> {
     let mut cmd = cargo_bin_cmd!("stedi");
     let output = cmd.args(args).arg("--format=json").output().unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
-    
-    stdout.lines()
+
+    stdout
+        .lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str(l).unwrap())
         .collect()
@@ -63,7 +64,7 @@ fn test_json_skip_reasons() {
 
     let args = vec!["hello", "goodbye", bin_path.to_str().unwrap()];
     let events = run_stedi_json(&args);
-    
+
     let file_event = &events[1]["file"];
     assert_eq!(file_event["type"], "skipped");
     assert_eq!(file_event["reason"], "binary");
@@ -75,7 +76,12 @@ fn test_json_validate_only() {
     let file_path = dir.path().join("test.txt");
     fs::write(&file_path, "hello world").unwrap();
 
-    let args = vec!["hello", "goodbye", file_path.to_str().unwrap(), "--validate-only"];
+    let args = vec![
+        "hello",
+        "goodbye",
+        file_path.to_str().unwrap(),
+        "--validate-only",
+    ];
     let events = run_stedi_json(&args);
 
     let start = &events[0]["run_start"];
@@ -86,7 +92,7 @@ fn test_json_validate_only() {
     let file_event = &events[1]["file"];
     assert_eq!(file_event["type"], "success");
     assert_eq!(file_event["modified"], true); // It found changes
-    
+
     // Verify file content is unchanged
     let content = fs::read_to_string(&file_path).unwrap();
     assert_eq!(content, "hello world");
@@ -98,7 +104,12 @@ fn test_json_no_write() {
     let file_path = dir.path().join("test.txt");
     fs::write(&file_path, "hello world").unwrap();
 
-    let args = vec!["hello", "goodbye", file_path.to_str().unwrap(), "--no-write"];
+    let args = vec![
+        "hello",
+        "goodbye",
+        file_path.to_str().unwrap(),
+        "--no-write",
+    ];
     let events = run_stedi_json(&args);
 
     let start = &events[0]["run_start"];
@@ -107,7 +118,7 @@ fn test_json_no_write() {
     let file_event = &events[1]["file"];
     assert_eq!(file_event["type"], "success");
     assert_eq!(file_event["modified"], true);
-    
+
     // Verify file content is unchanged
     let content = fs::read_to_string(&file_path).unwrap();
     assert_eq!(content, "hello world");
@@ -127,15 +138,16 @@ fn test_json_stdin_text() {
         .unwrap();
 
     let stdout = String::from_utf8(output.stdout).unwrap();
-    let events: Vec<Value> = stdout.lines()
+    let events: Vec<Value> = stdout
+        .lines()
         .filter(|l| !l.trim().is_empty())
         .filter(|l| l.starts_with("{"))
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
-    
+
     let start = &events[0]["run_start"];
-    assert_eq!(start["input_mode"], "stdin-text"); 
-    
+    assert_eq!(start["input_mode"], "stdin-text");
+
     let file_event = &events[1]["file"];
     assert_eq!(file_event["type"], "success");
     assert_eq!(file_event["path"], "<stdin>");
@@ -149,25 +161,31 @@ fn test_json_transaction_staging_failure() {
     fs::create_dir(&subdir).unwrap();
     let file_path = subdir.join("test.txt");
     fs::write(&file_path, "hello world").unwrap();
-    
+
     // Make subdir read-only to prevent creating temp file inside it
     let original_perms = fs::metadata(&subdir).unwrap().permissions();
     let mut perms = original_perms.clone();
     perms.set_readonly(true);
     fs::set_permissions(&subdir, perms).unwrap();
-    
+
     // Use transaction all
-    let args = vec!["hello", "goodbye", file_path.to_str().unwrap(), "--transaction=all"];
-    
+    let args = vec![
+        "hello",
+        "goodbye",
+        file_path.to_str().unwrap(),
+        "--transaction=all",
+    ];
+
     let mut cmd = cargo_bin_cmd!("stedi");
     let output_result = cmd.args(&args).arg("--format=json").output();
-    
+
     // Cleanup: restore permissions so tempdir can be deleted
     fs::set_permissions(&subdir, original_perms).unwrap();
     let output = output_result.unwrap();
-    
+
     let stdout = String::from_utf8(output.stdout).unwrap();
-    let events: Vec<Value> = stdout.lines()
+    let events: Vec<Value> = stdout
+        .lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
@@ -175,7 +193,7 @@ fn test_json_transaction_staging_failure() {
     assert!(events.len() >= 2);
     // File event should be Error because stage_file failed to create temp file
     let file_event = &events[1]["file"];
-    
+
     assert_eq!(file_event["type"], "error");
     // Verify it's not success
 }

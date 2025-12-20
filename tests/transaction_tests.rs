@@ -14,15 +14,15 @@ fn test_transaction_file_mode_partial_failure() {
 
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("foo")
-       .arg("bar")
-       .arg("--transaction")
-       .arg("file")
-       .arg("--expect")
-       .arg("3") // We have 2 matches, so this will fail
-       .arg(f1.to_str().unwrap())
-       .arg(f2.to_str().unwrap())
-       .assert()
-       .failure(); // Exit code 2
+        .arg("bar")
+        .arg("--transaction")
+        .arg("file")
+        .arg("--expect")
+        .arg("3") // We have 2 matches, so this will fail
+        .arg(f1.to_str().unwrap())
+        .arg(f2.to_str().unwrap())
+        .assert()
+        .failure(); // Exit code 2
 
     // Changes SHOULD persist in File mode because policy check is post-execution
     assert_eq!(fs::read_to_string(&f1).unwrap(), "bar");
@@ -41,15 +41,15 @@ fn test_transaction_all_mode_rollback() {
 
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("foo")
-       .arg("bar")
-       .arg("--transaction")
-       .arg("all")
-       .arg("--expect")
-       .arg("3") // We have 2 matches, so this will fail
-       .arg(f1.to_str().unwrap())
-       .arg(f2.to_str().unwrap())
-       .assert()
-       .failure(); // Exit code 2
+        .arg("bar")
+        .arg("--transaction")
+        .arg("all")
+        .arg("--expect")
+        .arg("3") // We have 2 matches, so this will fail
+        .arg(f1.to_str().unwrap())
+        .arg(f2.to_str().unwrap())
+        .assert()
+        .failure(); // Exit code 2
 
     // Changes SHOULD NOT persist
     assert_eq!(fs::read_to_string(&f1).unwrap(), "foo");
@@ -66,13 +66,13 @@ fn test_transaction_all_mode_success() {
 
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("foo")
-       .arg("bar")
-       .arg("--transaction")
-       .arg("all")
-       .arg(f1.to_str().unwrap())
-       .arg(f2.to_str().unwrap())
-       .assert()
-       .success();
+        .arg("bar")
+        .arg("--transaction")
+        .arg("all")
+        .arg(f1.to_str().unwrap())
+        .arg(f2.to_str().unwrap())
+        .assert()
+        .success();
 
     // Changes SHOULD persist
     assert_eq!(fs::read_to_string(&f1).unwrap(), "bar");

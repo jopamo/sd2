@@ -26,7 +26,7 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result
 fn test_dogfood_self_refactor() {
     let temp_dir = TempDir::new().unwrap();
     let src_copy = temp_dir.path().join("src_copy");
-    
+
     // Copy real src to temp
     copy_dir_all("src", &src_copy).expect("Failed to copy src directory");
 
@@ -44,15 +44,18 @@ fn test_dogfood_self_refactor() {
     // We use word boundaries to avoid replacing "FileResult" -> "FileSdResult"
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("Result")
-       .arg("SdResult")
-       .arg("--files0")
-       .arg("--word-regexp")
-       .write_stdin(input_data);
+        .arg("SdResult")
+        .arg("--files0")
+        .arg("--word-regexp")
+        .write_stdin(input_data);
 
     let output = cmd.output().unwrap();
-    
+
     if !output.status.success() {
-        eprintln!("Dogfooding failed: {}", String::from_utf8_lossy(&output.stderr));
+        eprintln!(
+            "Dogfooding failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         panic!("Command failed");
     }
 
@@ -62,15 +65,15 @@ fn test_dogfood_self_refactor() {
     // Verify changes in a specific file, e.g., main.rs
     let main_rs = src_copy.join("main.rs");
     let content = fs::read_to_string(&main_rs).unwrap();
-    
+
     // Check if "Result" was replaced
     assert!(content.contains("fn try_main() -> SdResult<i32>"));
     // Check if "FileResult" was NOT replaced (due to word-regexp)
     // Actually FileResult is in reporter.rs, let's check reporter.rs
-    
+
     let reporter_rs = src_copy.join("reporter.rs");
     let rep_content = fs::read_to_string(&reporter_rs).unwrap();
-    
+
     // "pub struct FileResult" should still exist
     assert!(rep_content.contains("pub struct FileResult"));
     // "pub fn add_result(&mut self, result: FileResult)" should exist

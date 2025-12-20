@@ -141,7 +141,7 @@ pub struct Pipeline {
     pub files: Vec<String>,
     /// Operations to apply to each file.
     pub operations: Vec<Operation>,
-    
+
     // Safety and guarantees
     /// Dry-run mode: compute changes but don't write.
     #[serde(default)]
@@ -174,7 +174,7 @@ pub struct Pipeline {
     /// Validate manifest and semantic checks without running.
     #[serde(default)]
     pub validate_only: bool,
-    
+
     /// Glob patterns to include.
     #[serde(default)]
     pub glob_include: Option<Vec<String>>,

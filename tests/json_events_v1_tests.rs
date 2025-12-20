@@ -6,8 +6,9 @@ fn run_stedi_json(args: &[&str]) -> Vec<Value> {
     let mut cmd = cargo_bin_cmd!("stedi");
     let output = cmd.args(args).arg("--format=json").output().unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
-    
-    stdout.lines()
+
+    stdout
+        .lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str(l).unwrap())
         .collect()
@@ -24,7 +25,7 @@ fn test_json_v1_fields_run_end_committed() {
 
     let end_wrapper = events.last().unwrap();
     let end = &end_wrapper["run_end"];
-    
+
     // Check new fields
     assert_eq!(end["committed"], true);
     assert!(end["duration_ms"].is_number());
@@ -42,7 +43,7 @@ fn test_json_v1_fields_run_end_committed_dry_run() {
 
     let end_wrapper = events.last().unwrap();
     let end = &end_wrapper["run_end"];
-    
+
     // Check committed is false for dry run
     assert_eq!(end["committed"], false);
 }
@@ -60,12 +61,13 @@ fn test_json_v1_fields_file_is_virtual() {
         .unwrap();
 
     let stdout = String::from_utf8(output.stdout).unwrap();
-    let events: Vec<Value> = stdout.lines()
+    let events: Vec<Value> = stdout
+        .lines()
         .filter(|l| !l.trim().is_empty())
         .filter(|l| l.starts_with("{"))
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
-    
+
     let file_event = &events[1]["file"];
     assert_eq!(file_event["type"], "success");
     assert_eq!(file_event["is_virtual"], true);
@@ -92,7 +94,7 @@ fn test_json_v1_fields_error_code() {
     let dir = tempfile::tempdir().unwrap();
     let file_path = dir.path().join("test.txt");
     // Don't create the file, so it fails with NotFound
-    
+
     let args = vec!["hello", "goodbye", file_path.to_str().unwrap()];
     let events = run_stedi_json(&args);
 

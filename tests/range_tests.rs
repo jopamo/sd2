@@ -9,16 +9,14 @@ fn test_range_single_line() {
     fs::write(&file_path, "foo\nfoo\nfoo\nfoo").unwrap();
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stedi"));
-    cmd
-
-        .arg("foo")
+    cmd.arg("foo")
         .arg("bar")
         .arg("--range")
         .arg("2")
         .arg(file_path.to_str().unwrap())
         .assert()
         .success();
-    
+
     let content = fs::read_to_string(&file_path).unwrap();
     assert_eq!(content, "foo\nbar\nfoo\nfoo");
 }
@@ -30,16 +28,14 @@ fn test_range_start_end() {
     fs::write(&file_path, "foo\nfoo\nfoo\nfoo").unwrap();
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stedi"));
-    cmd
-
-        .arg("foo")
+    cmd.arg("foo")
         .arg("bar")
         .arg("--range")
         .arg("2:3")
         .arg(file_path.to_str().unwrap())
         .assert()
         .success();
-    
+
     let content = fs::read_to_string(&file_path).unwrap();
     assert_eq!(content, "foo\nbar\nbar\nfoo");
 }
@@ -51,16 +47,14 @@ fn test_range_start_unbounded() {
     fs::write(&file_path, "foo\nfoo\nfoo\nfoo").unwrap();
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stedi"));
-    cmd
-
-        .arg("foo")
+    cmd.arg("foo")
         .arg("bar")
         .arg("--range")
         .arg("3:")
         .arg(file_path.to_str().unwrap())
         .assert()
         .success();
-    
+
     let content = fs::read_to_string(&file_path).unwrap();
     assert_eq!(content, "foo\nfoo\nbar\nbar");
 }

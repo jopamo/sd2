@@ -20,7 +20,9 @@ pub struct StagedEntry {
 impl StagedEntry {
     /// Commit the staged file (atomic rename).
     pub fn commit(self) -> Result<()> {
-        self.temp.persist(&self.target).map_err(|e| Error::Io(e.error))?;
+        self.temp
+            .persist(&self.target)
+            .map_err(|e| Error::Io(e.error))?;
         Ok(())
     }
 }
@@ -30,7 +32,8 @@ pub fn stage_file(path: &Path, data: &[u8], options: &WriteOptions) -> Result<St
     let target_path = resolve_symlink(path, options)?;
 
     // Write atomically using a temporary file in the same directory
-    let parent = target_path.parent()
+    let parent = target_path
+        .parent()
         .ok_or_else(|| Error::InvalidPath(target_path.to_path_buf()))?;
 
     let mut temp = NamedTempFile::new_in(parent)?;

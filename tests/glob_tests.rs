@@ -11,7 +11,6 @@ fn test_glob_include() {
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stedi"));
     cmd.current_dir(dir.path())
-
         .arg("foo")
         .arg("bar")
         .arg("--glob-include")
@@ -21,8 +20,14 @@ fn test_glob_include() {
         .assert()
         .success();
 
-    assert_eq!(fs::read_to_string(dir.path().join("match.txt")).unwrap(), "bar");
-    assert_eq!(fs::read_to_string(dir.path().join("ignore.md")).unwrap(), "foo");
+    assert_eq!(
+        fs::read_to_string(dir.path().join("match.txt")).unwrap(),
+        "bar"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("ignore.md")).unwrap(),
+        "foo"
+    );
 }
 
 #[test]
@@ -33,7 +38,6 @@ fn test_glob_exclude() {
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stedi"));
     cmd.current_dir(dir.path())
-
         .arg("foo")
         .arg("bar")
         .arg("--glob-exclude")
@@ -43,8 +47,14 @@ fn test_glob_exclude() {
         .assert()
         .success();
 
-    assert_eq!(fs::read_to_string(dir.path().join("match.txt")).unwrap(), "bar");
-    assert_eq!(fs::read_to_string(dir.path().join("ignore.md")).unwrap(), "foo");
+    assert_eq!(
+        fs::read_to_string(dir.path().join("match.txt")).unwrap(),
+        "bar"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("ignore.md")).unwrap(),
+        "foo"
+    );
 }
 
 #[test]
@@ -56,7 +66,6 @@ fn test_glob_include_exclude_combined() {
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stedi"));
     cmd.current_dir(dir.path())
-
         .arg("foo")
         .arg("bar")
         .arg("--glob-include")
@@ -84,9 +93,8 @@ fn test_glob_absolute_path_recursive() {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stedi"));
     // Pass absolute path
     // glob "**/*.txt" should match it
-    
-    cmd
-        .arg("foo")
+
+    cmd.arg("foo")
         .arg("bar")
         .arg("--glob-include")
         .arg("**/*.txt")
@@ -105,9 +113,8 @@ fn test_glob_absolute_path_basename_match() {
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stedi"));
     // "*.txt" matches basename even in absolute path (globset behavior)
-    
-    cmd
-        .arg("foo")
+
+    cmd.arg("foo")
         .arg("bar")
         .arg("--glob-include")
         .arg("*.txt")
@@ -125,9 +132,8 @@ fn test_glob_absolute_path_extension_mismatch() {
     fs::write(&abs_path, "foo").unwrap();
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stedi"));
-    
-    cmd
-        .arg("foo")
+
+    cmd.arg("foo")
         .arg("bar")
         .arg("--glob-include")
         .arg("*.txt")

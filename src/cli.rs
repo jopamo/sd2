@@ -84,7 +84,13 @@ pub enum Commands {
 pub struct DefaultArgs {
     /// JSON manifest file specifying transformations. Used with `apply` command.
     /// This is here only for cases where `apply` is used as the default command with `--manifest`.
-    #[arg(short, long, value_name = "FILE", global = true, help_heading = "Input Options")]
+    #[arg(
+        short,
+        long,
+        value_name = "FILE",
+        global = true,
+        help_heading = "Input Options"
+    )]
     pub manifest: Option<PathBuf>,
 
     /// Pattern to find (literal string or regex).
@@ -126,11 +132,20 @@ pub struct DefaultArgs {
     // Match options
     // ========================================================================
     /// Treat FIND as a regex pattern.
-    #[arg(long = "regex", conflicts_with = "fixed_strings", help_heading = "Match Options")]
+    #[arg(
+        long = "regex",
+        conflicts_with = "fixed_strings",
+        help_heading = "Match Options"
+    )]
     pub regex: bool,
 
     /// Treat FIND as a literal string (not regex).
-    #[arg(short = 'F', long = "fixed-strings", conflicts_with = "regex", help_heading = "Match Options")]
+    #[arg(
+        short = 'F',
+        long = "fixed-strings",
+        conflicts_with = "regex",
+        help_heading = "Match Options"
+    )]
     pub fixed_strings: bool,
 
     /// Case-insensitive matching.
@@ -158,11 +173,20 @@ pub struct DefaultArgs {
     pub no_unicode: bool,
 
     /// Maximum replacements per file.
-    #[arg(long = "limit", value_name = "N", visible_alias = "max-replacements", help_heading = "Scope Options")]
+    #[arg(
+        long = "limit",
+        value_name = "N",
+        visible_alias = "max-replacements",
+        help_heading = "Scope Options"
+    )]
     pub limit: Option<usize>,
 
     /// Only apply replacements in a line range (1-based, START[:END]).
-    #[arg(long = "range", value_name = "START[:END]", help_heading = "Scope Options")]
+    #[arg(
+        long = "range",
+        value_name = "START[:END]",
+        help_heading = "Scope Options"
+    )]
     pub range: Option<String>,
 
     /// Enable regex capture expansion (e.g. $1, $name).
@@ -170,15 +194,28 @@ pub struct DefaultArgs {
     pub expand: bool,
 
     /// Replacement validation mode.
-    #[arg(long = "validation-mode", value_enum, global = true, help_heading = "Match Options")]
+    #[arg(
+        long = "validation-mode",
+        value_enum,
+        global = true,
+        help_heading = "Match Options"
+    )]
     pub validation_mode: Option<ValidationMode>,
 
     /// Apply edits only to files whose *path* matches the glob.
-    #[arg(long = "glob-include", value_name = "GLOB", help_heading = "Scope Options")]
+    #[arg(
+        long = "glob-include",
+        value_name = "GLOB",
+        help_heading = "Scope Options"
+    )]
     pub glob_include: Vec<String>,
 
     /// Exclude matching paths.
-    #[arg(long = "glob-exclude", value_name = "GLOB", help_heading = "Scope Options")]
+    #[arg(
+        long = "glob-exclude",
+        value_name = "GLOB",
+        help_heading = "Scope Options"
+    )]
     pub glob_exclude: Vec<String>,
 
     // ========================================================================
@@ -208,26 +245,51 @@ pub struct DefaultArgs {
     // Transaction model
     // ========================================================================
     /// Transaction model: 'all' (default) or 'file'.
-    #[arg(long = "transaction", value_enum, global = true, help_heading = "Configuration")]
+    #[arg(
+        long = "transaction",
+        value_enum,
+        global = true,
+        help_heading = "Configuration"
+    )]
     pub transaction: Option<Transaction>,
 
     // ========================================================================
     // Filesystem behavior
     // ========================================================================
     /// Symlink handling: 'follow' (default), 'skip', or 'error'.
-    #[arg(long = "symlinks", value_enum, global = true, help_heading = "Configuration")]
+    #[arg(
+        long = "symlinks",
+        value_enum,
+        global = true,
+        help_heading = "Configuration"
+    )]
     pub symlinks: Option<Symlinks>,
 
     /// Binary file handling: 'skip' (default) or 'error'.
-    #[arg(long = "binary", value_enum, global = true, help_heading = "Configuration")]
+    #[arg(
+        long = "binary",
+        value_enum,
+        global = true,
+        help_heading = "Configuration"
+    )]
     pub binary: Option<BinaryFileMode>,
 
     /// Permissions handling: 'preserve' (default) or 'fixed'.
-    #[arg(long = "permissions", value_enum, global = true, help_heading = "Configuration")]
+    #[arg(
+        long = "permissions",
+        value_enum,
+        global = true,
+        help_heading = "Configuration"
+    )]
     pub permissions: Option<PermissionsMode>,
 
     /// Fixed permissions mode (e.g. 755), used if --permissions=fixed.
-    #[arg(long = "mode", value_name = "MODE", global = true, help_heading = "Configuration")]
+    #[arg(
+        long = "mode",
+        value_name = "MODE",
+        global = true,
+        help_heading = "Configuration"
+    )]
     pub mode: Option<String>,
 
     // ========================================================================
@@ -242,11 +304,20 @@ pub struct DefaultArgs {
     pub quiet: bool,
 
     /// Explicit output formatting.
-    #[arg(long = "format", value_enum, global = true, help_heading = "Output Options")]
+    #[arg(
+        long = "format",
+        value_enum,
+        global = true,
+        help_heading = "Output Options"
+    )]
     pub format: Option<OutputFormat>,
 
     /// Validate manifest and semantic checks without running.
-    #[arg(long = "validate-only", conflicts_with = "dry_run", help_heading = "Safety Options")]
+    #[arg(
+        long = "validate-only",
+        conflicts_with = "dry_run",
+        help_heading = "Safety Options"
+    )]
     pub validate_only: bool,
 }
 

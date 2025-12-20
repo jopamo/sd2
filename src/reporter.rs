@@ -1,7 +1,7 @@
+use crate::events::{Event, FileEvent, Policies, RunEnd, RunStart, SkipReason};
+use crate::model::Pipeline;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use crate::events::{Event, RunStart, FileEvent, RunEnd, Policies, SkipReason};
-use crate::model::Pipeline;
 
 /// Result of processing a single file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,14 +104,15 @@ impl Report {
             }
 
             // Print summary to stderr
-             if self.validate_only {
+            if self.validate_only {
                 eprintln!("VALIDATION RUN - No files were written.");
             } else if self.dry_run {
                 eprintln!("DRY RUN - No files were written.");
             }
-            eprintln!("Processed {} files, modified {}, {} replacements.",
-                 self.total, self.modified, self.replacements);
-
+            eprintln!(
+                "Processed {} files, modified {}, {} replacements.",
+                self.total, self.modified, self.replacements
+            );
         } else {
             // Standard behavior
             if self.validate_only {
@@ -119,15 +120,21 @@ impl Report {
             } else if self.dry_run {
                 println!("DRY RUN - No files were written.");
             }
-            println!("Processed {} files, modified {}, {} replacements.",
-                     self.total, self.modified, self.replacements);
+            println!(
+                "Processed {} files, modified {}, {} replacements.",
+                self.total, self.modified, self.replacements
+            );
             for file in &self.files {
                 if let Some(err) = &file.error {
                     eprintln!("  {}: ERROR - {}", file.path.display(), err);
                 } else if let Some(reason) = &file.skipped {
                     println!("  {}: skipped ({})", file.path.display(), reason);
                 } else if file.modified {
-                    println!("  {}: modified ({} replacements)", file.path.display(), file.replacements);
+                    println!(
+                        "  {}: modified ({} replacements)",
+                        file.path.display(),
+                        file.replacements
+                    );
                     if let Some(diff) = &file.diff {
                         println!("{}", diff);
                     }
@@ -147,38 +154,46 @@ impl Report {
         let has_generated_content = self.files.iter().any(|f| f.generated_content.is_some());
 
         if has_generated_content {
-             // Same as print_human for content
+            // Same as print_human for content
             for file in &self.files {
                 if let Some(content) = &file.generated_content {
                     print!("{}", content);
                 }
-                 if let Some(err) = &file.error {
+                if let Some(err) = &file.error {
                     eprintln!("ERROR: {}", err);
                 }
             }
-             // Summary to stderr
-             if self.validate_only {
+            // Summary to stderr
+            if self.validate_only {
                 eprintln!("VALIDATION RUN - No files were written.");
             } else if self.dry_run {
                 eprintln!("DRY RUN - No files were written.");
             }
-            eprintln!("Processed {} files, modified {}, {} replacements.",
-                 self.total, self.modified, self.replacements);
+            eprintln!(
+                "Processed {} files, modified {}, {} replacements.",
+                self.total, self.modified, self.replacements
+            );
         } else {
             if self.validate_only {
                 println!("VALIDATION RUN - No files were written.");
             } else if self.dry_run {
                 println!("DRY RUN - No files were written.");
             }
-            println!("Processed {} files, modified {}, {} replacements.",
-                     self.total, self.modified, self.replacements);
+            println!(
+                "Processed {} files, modified {}, {} replacements.",
+                self.total, self.modified, self.replacements
+            );
             for file in &self.files {
                 if let Some(err) = &file.error {
                     eprintln!("  {}: ERROR - {}", file.path.display(), err);
                 } else if let Some(reason) = &file.skipped {
                     println!("  {}: skipped ({})", file.path.display(), reason);
                 } else if file.modified {
-                    println!("  {}: modified ({} replacements)", file.path.display(), file.replacements);
+                    println!(
+                        "  {}: modified ({} replacements)",
+                        file.path.display(),
+                        file.replacements
+                    );
                     // Diff is explicitly omitted in summary format
                 } else {
                     println!("  {}: no changes", file.path.display());
@@ -192,7 +207,7 @@ impl Report {
         if let Some(msg) = &self.policy_violation {
             eprintln!("Policy Error: {}", msg);
         }
-        
+
         // For stdin-text, quiet mode probably still wants the output?
         // If I say "quiet", usually I want NO output except errors.
         // But for stdin-text, the output IS the result.
@@ -200,10 +215,10 @@ impl Report {
         // "Ensure --quiet suppresses human output but never suppresses JSON errors/events"
         // It doesn't say anything about data output.
         // But usually -q means "don't print logs".
-        
+
         let has_generated_content = self.files.iter().any(|f| f.generated_content.is_some());
         if has_generated_content {
-             for file in &self.files {
+            for file in &self.files {
                 if let Some(content) = &file.generated_content {
                     print!("{}", content);
                 }
@@ -211,7 +226,7 @@ impl Report {
         }
 
         for file in &self.files {
-             if let Some(err) = &file.error {
+            if let Some(err) = &file.error {
                 eprintln!("  {}: ERROR - {}", file.path.display(), err);
             }
         }
@@ -230,11 +245,17 @@ impl Report {
     }
 
     /// Print report as JSON events.
-    pub fn print_json(&self, pipeline: &Pipeline, tool_version: &str, mode: &str, input_mode: &str) {
-        // If input_mode is stdin-text, we normally printed content. 
+    pub fn print_json(
+        &self,
+        pipeline: &Pipeline,
+        tool_version: &str,
+        mode: &str,
+        input_mode: &str,
+    ) {
+        // If input_mode is stdin-text, we normally printed content.
         // But in JSON mode, we probably shouldn't print raw content to stdout mixed with JSON.
         // The content is inside the JSON event.
-        
+
         let start = RunStart {
             schema_version: "1".into(),
             tool_version: tool_version.into(),
@@ -250,21 +271,27 @@ impl Report {
                 fail_on_change: pipeline.fail_on_change,
             },
         };
-        println!("{}", serde_json::to_string(&Event::RunStart(start)).unwrap());
+        println!(
+            "{}",
+            serde_json::to_string(&Event::RunStart(start)).unwrap()
+        );
 
         for file in &self.files {
             let event = if let Some(err) = &file.error {
                 FileEvent::Error {
                     path: file.path.clone(),
-                    code: file.error_code.clone().unwrap_or_else(|| "E_UNKNOWN".into()),
+                    code: file
+                        .error_code
+                        .clone()
+                        .unwrap_or_else(|| "E_UNKNOWN".into()),
                     message: err.clone(),
                 }
             } else if let Some(reason) = &file.skipped {
-                 let reason_enum = match reason.as_str() {
+                let reason_enum = match reason.as_str() {
                     "binary file" => SkipReason::Binary,
                     "symlink" => SkipReason::Symlink,
                     "glob exclude" => SkipReason::GlobExclude,
-                     other => SkipReason::Other(other.to_string()), 
+                    other => SkipReason::Other(other.to_string()),
                 };
                 FileEvent::Skipped {
                     path: file.path.clone(),
@@ -309,9 +336,9 @@ impl Report {
             } else if let Some(diff) = &file.diff {
                 println!("{}", diff);
             } else if file.modified {
-                 println!("(modified)");
+                println!("(modified)");
             } else {
-                 println!("(no changes)");
+                println!("(no changes)");
             }
             println!("</file>");
         }

@@ -19,7 +19,11 @@ fn test_dot_slash_prefix_vs_glob() {
         .success();
 
     // If glob matched, it should be replaced
-    assert_eq!(fs::read_to_string(dir.path().join("src/match.txt")).unwrap(), "bar", "Failed to match ./src/match.txt against src/*.txt");
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/match.txt")).unwrap(),
+        "bar",
+        "Failed to match ./src/match.txt against src/*.txt"
+    );
 }
 
 #[test]
@@ -40,5 +44,9 @@ fn test_absolute_path_vs_relative_glob() {
         .success();
 
     // If glob matched, it should be replaced
-    assert_eq!(fs::read_to_string(&abs_path).unwrap(), "bar", "Failed to match absolute path against relative glob src/*.txt");
+    assert_eq!(
+        fs::read_to_string(&abs_path).unwrap(),
+        "bar",
+        "Failed to match absolute path against relative glob src/*.txt"
+    );
 }

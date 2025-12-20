@@ -1,6 +1,6 @@
-use thiserror::Error;
 use std::path::PathBuf;
 use tempfile::PersistError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 #[allow(dead_code)]

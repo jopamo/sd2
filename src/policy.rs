@@ -20,20 +20,20 @@ impl<'a> PolicyEnforcer<'a> {
 
     /// Check if staging is allowed for this pipeline.
     pub fn should_stage(&self) -> bool {
-         // validate_only implicitly prevents staging via dry_run (if enforced),
-         // but we should be explicit.
-         if self.pipeline.validate_only {
-             return false;
-         }
-         
-         // In "transaction all" mode, we stage.
-         if self.pipeline.transaction == crate::model::Transaction::All {
-             return true;
-         }
+        // validate_only implicitly prevents staging via dry_run (if enforced),
+        // but we should be explicit.
+        if self.pipeline.validate_only {
+            return false;
+        }
 
-         false
+        // In "transaction all" mode, we stage.
+        if self.pipeline.transaction == crate::model::Transaction::All {
+            return true;
+        }
+
+        false
     }
-    
+
     /// Check if writing is allowed for a specific file application.
     /// Returns true if we should proceed with write/stage.
     pub fn can_write(&self, modified: bool) -> bool {
@@ -75,7 +75,7 @@ impl<'a> PolicyEnforcer<'a> {
         if self.pipeline.validate_only {
             return false;
         }
-        
+
         // If dry_run, never commit.
         if self.pipeline.dry_run {
             return false;
@@ -162,7 +162,12 @@ mod tests {
 
         enforcer.enforce_post_run(&mut report);
         assert!(report.policy_violation.is_some());
-        assert!(report.policy_violation.unwrap().contains("No matches found"));
+        assert!(
+            report
+                .policy_violation
+                .unwrap()
+                .contains("No matches found")
+        );
     }
 
     #[test]
@@ -175,7 +180,12 @@ mod tests {
 
         enforcer.enforce_post_run(&mut report);
         assert!(report.policy_violation.is_some());
-        assert!(report.policy_violation.unwrap().contains("Changes detected"));
+        assert!(
+            report
+                .policy_violation
+                .unwrap()
+                .contains("Changes detected")
+        );
     }
 
     #[test]

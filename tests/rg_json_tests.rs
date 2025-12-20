@@ -1,5 +1,5 @@
-use std::io::Write;
 use assert_cmd::cargo::cargo_bin_cmd;
+use std::io::Write;
 use tempfile::NamedTempFile;
 
 #[test]
@@ -26,11 +26,11 @@ fn rg_json_span_targeting() {
     // 3. Run stedi with --rg-json, replacing "foo" with "bar"
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("foo")
-       .arg("bar")
-       .arg("--rg-json")
-       .write_stdin(rg_json)
-       .assert()
-       .success();
+        .arg("bar")
+        .arg("--rg-json")
+        .write_stdin(rg_json)
+        .assert()
+        .success();
 
     // 4. Verify content:
     //    line 1: foo (untouched)
@@ -61,11 +61,11 @@ fn rg_json_multiple_submatches() {
 
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("foo")
-       .arg("bar")
-       .arg("--rg-json")
-       .write_stdin(rg_json)
-       .assert()
-       .success();
+        .arg("bar")
+        .arg("--rg-json")
+        .write_stdin(rg_json)
+        .assert()
+        .success();
 
     let content = std::fs::read_to_string(&path).unwrap();
     assert_eq!(content, "foo bar\n");

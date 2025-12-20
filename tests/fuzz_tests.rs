@@ -15,7 +15,7 @@ proptest! {
             .write_stdin(s.as_bytes())
             .assert();
 
-        // We accept failure (invalid json) or success. 
+        // We accept failure (invalid json) or success.
         // We mainly care that it didn't segfault or panic.
         // assert_cmd checks for status, but we want to allow 1.
         let output = assert.get_output();
@@ -39,11 +39,11 @@ proptest! {
             .write_stdin(s.as_bytes())
             .assert()
             .success();
-        
+
         // This should always succeed (exit 0) because text replacement never fails on valid utf8 string
         // (proptest generates Strings, so valid UTF8).
         // Unless we hit memory limits, but for small strings it's fine.
-        
+
         let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
         // If s contains "foo", stdout should change.
         if s.contains("foo") {

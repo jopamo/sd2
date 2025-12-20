@@ -1,6 +1,6 @@
-use anyhow::{anyhow, Context, Result};
-use base64::engine::general_purpose::STANDARD;
+use anyhow::{Context, Result, anyhow};
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -101,13 +101,13 @@ impl RgTextOrBytes {
     /// On Others: Falls back to lossy UTF-8 (safer than crashing).
     pub fn to_os_string(&self) -> Result<OsString> {
         let raw_cow = self.as_bytes()?;
-        
+
         #[cfg(unix)]
         {
             Ok(OsString::from_vec(raw_cow.into_owned()))
         }
 
-        #[cfg(not(unix))] 
+        #[cfg(not(unix))]
         {
             // Fallback for Windows/Wasm where paths *must* be valid WTF-8/UTF-8
             let s = match raw_cow {
@@ -150,7 +150,7 @@ pub fn stream_rg_json_ndjson<R: BufRead, S: RgSink>(mut reader: R, sink: &mut S)
         // We accept that some lines might not be valid JSON or might not be the messages we care about
         // But for --rg-json, we expect a stream of these.
         if let Ok(msg) = serde_json::from_slice::<RgMessage>(&buf) {
-             sink.handle(msg)?;
+            sink.handle(msg)?;
         }
     }
 
@@ -178,10 +178,10 @@ impl RgSink for DeinterleavingSink {
         match msg.kind {
             RgKind::Match | RgKind::Context => {
                 if let Some(data) = msg.data {
-                     if let Some(ref path_obj) = data.path {
-                         let path = path_obj.to_os_string()?;
-                         self.events.entry(path).or_default().push(data);
-                     }
+                    if let Some(ref path_obj) = data.path {
+                        let path = path_obj.to_os_string()?;
+                        self.events.entry(path).or_default().push(data);
+                    }
                 }
                 Ok(())
             }
@@ -189,4 +189,3 @@ impl RgSink for DeinterleavingSink {
         }
     }
 }
-

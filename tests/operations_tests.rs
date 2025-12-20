@@ -22,8 +22,8 @@ fn test_operation_delete() {
 
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("apply")
-       .arg("--manifest")
-       .arg(manifest_path.to_str().unwrap());
+        .arg("--manifest")
+        .arg(manifest_path.to_str().unwrap());
 
     cmd.assert().success();
 
@@ -53,8 +53,8 @@ fn test_operation_replace_expand() {
 
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("apply")
-       .arg("--manifest")
-       .arg(manifest_path.to_str().unwrap());
+        .arg("--manifest")
+        .arg(manifest_path.to_str().unwrap());
 
     cmd.assert().success();
 
@@ -83,8 +83,8 @@ fn test_operation_delete_regex() {
 
     let mut cmd = cargo_bin_cmd!("stedi");
     cmd.arg("apply")
-       .arg("--manifest")
-       .arg(manifest_path.to_str().unwrap());
+        .arg("--manifest")
+        .arg(manifest_path.to_str().unwrap());
 
     cmd.assert().success();
 

@@ -22,11 +22,10 @@ fn test_default_output_format_non_tty() {
     // Verify current behavior (or what we expect BEFORE changes)
     // Ideally this test fails after we make changes, then we update it.
     // Or we write it for the Desired behavior and see it fail now.
-    
+
     // Let's write for Desired behavior: It should be JSON.
     // JSON output should start with "{" (for Report struct)
-    cmd.assert()
-        .stdout(predicate::str::starts_with("{"));
+    cmd.assert().stdout(predicate::str::starts_with("{"));
 }
 
 #[test]
@@ -46,10 +45,10 @@ fn test_explicit_format_summary() {
     // The diff would look like "-foo bar" or "+baz bar" or colored output.
     // In Diff format (print_human), it prints the diff.
     // In Summary format, we want to ensure no diff lines are printed.
-    
+
     // Note: currently print_human prints the diff. So this test might pass or fail depending on if diff is generated.
     // But we want to ensure "Summary" explicitly excludes diffs even if they are available.
-    
+
     cmd.assert()
         .stdout(predicate::str::contains("modified (1 replacements)")) // Summary part
         .stdout(predicate::str::contains("@@").not()); // Diff header usually contains @@
@@ -69,7 +68,10 @@ fn test_explicit_format_agent() {
         .arg("--format=agent");
 
     cmd.assert()
-        .stdout(predicate::str::contains(format!("<file path=\"{}\">", file_path.display())))
+        .stdout(predicate::str::contains(format!(
+            "<file path=\"{}\">",
+            file_path.display()
+        )))
         .stdout(predicate::str::contains("-foo bar"))
         .stdout(predicate::str::contains("+baz bar"))
         .stdout(predicate::str::contains("</file>"));

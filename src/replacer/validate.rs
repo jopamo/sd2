@@ -39,11 +39,11 @@ pub fn validate_replacement(replacement: &str, mode: ValidationMode) -> Result<C
                         break;
                     }
                 }
-                
+
                 if has_non_digit {
                     match mode {
                         ValidationMode::Strict => {
-                             return Err(Error::AmbiguousReplacement(format!(
+                            return Err(Error::AmbiguousReplacement(format!(
                                 "Ambiguous capture group reference `${}` followed by non-digit characters. Use `${{{}}}` to disambiguate.",
                                 &name[..digit_count],
                                 &name[..digit_count]
@@ -58,14 +58,17 @@ pub fn validate_replacement(replacement: &str, mode: ValidationMode) -> Result<C
                                 new_replacement.push_str(&replacement[last_end..capture.start]);
                             }
 
-                            eprintln!("WARN: Ambiguous capture group reference `${}` rewritten to `${{{}}}`.", 
-                                      &name[..digit_count], &name[..digit_count]);
+                            eprintln!(
+                                "WARN: Ambiguous capture group reference `${}` rewritten to `${{{}}}`.",
+                                &name[..digit_count],
+                                &name[..digit_count]
+                            );
 
                             new_replacement.push_str("${");
                             new_replacement.push_str(&name[..digit_count]);
                             new_replacement.push_str("}");
                             new_replacement.push_str(&name[digit_count..]);
-                            
+
                             last_end = capture.end;
                         }
                         ValidationMode::None => unreachable!(),
@@ -157,7 +160,7 @@ impl<'a> Iterator for CaptureIter<'a> {
                             let (_, c) = self.chars.next().unwrap();
                             consumed += c.len_utf8();
                         }
-                         return Some(Capture {
+                        return Some(Capture {
                             name: cap_name,
                             start,
                             end: start + 1 + name_len, // $ + name
@@ -214,22 +217,32 @@ mod tests {
     #[test]
     fn test_ambiguous_capture_strict() {
         let cases = [
-            ("$1", true),           // valid
-            ("$123", true),         // valid
-            ("$1bad", false),       // ambiguous
-            ("$1bad$2", false),     // first ambiguous
-            ("${1}bad", true),      // braced okay
-            ("$foo", true),         // named
-            ("$$", true),           // escaped dollar
-            ("$1_", false),         // underscore after digits is ambiguous
+            ("$1", true),       // valid
+            ("$123", true),     // valid
+            ("$1bad", false),   // ambiguous
+            ("$1bad$2", false), // first ambiguous
+            ("${1}bad", true),  // braced okay
+            ("$foo", true),     // named
+            ("$$", true),       // escaped dollar
+            ("$1_", false),     // underscore after digits is ambiguous
         ];
         for (input, should_validate) in cases {
             let result = validate_replacement(input, ValidationMode::Strict);
             if should_validate {
-                assert!(result.is_ok(), "Expected OK for {:?}, got {:?}", input, result);
+                assert!(
+                    result.is_ok(),
+                    "Expected OK for {:?}, got {:?}",
+                    input,
+                    result
+                );
                 assert_eq!(result.unwrap(), input);
             } else {
-                assert!(result.is_err(), "Expected error for {:?}, got {:?}", input, result);
+                assert!(
+                    result.is_err(),
+                    "Expected error for {:?}, got {:?}",
+                    input,
+                    result
+                );
             }
         }
     }
@@ -243,7 +256,7 @@ mod tests {
         // $1bad$2ok -> ${1}bad${2}ok
         let result = validate_replacement("$1bad$2ok", ValidationMode::Warn).unwrap();
         assert_eq!(result, "${1}bad${2}ok");
-        
+
         // $10bad -> ${10}bad
         let result = validate_replacement("$10bad", ValidationMode::Warn).unwrap();
         assert_eq!(result, "${10}bad");

@@ -7,7 +7,7 @@ fn test_repeated_inputs_no_transaction() {
     // Behavior: Sequential application.
     // 1. Read A, replace -> B, write B.
     // 2. Read B, replace -> C, write C.
-    
+
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("file.txt");
     fs::write(&file_path, "foo").unwrap();
@@ -55,7 +55,7 @@ fn test_repeated_inputs_transaction_all() {
     // 1. Read A. Replace -> B. Stage B.
     // 2. Read A (original). Replace -> B. Stage B.
     // Commit: Write B.
-    
+
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("file.txt");
     fs::write(&file_path, "foo").unwrap();
@@ -86,9 +86,9 @@ fn test_glob_include_exclude_precedence() {
         .arg("foo")
         .arg("bar")
         .arg("--glob-include")
-        .arg("*.txt")   // Include a.txt, b.txt
+        .arg("*.txt") // Include a.txt, b.txt
         .arg("--glob-exclude")
-        .arg("b.txt")   // Exclude b.txt
+        .arg("b.txt") // Exclude b.txt
         .arg("a.txt")
         .arg("b.txt")
         .arg("c.md")
@@ -97,7 +97,7 @@ fn test_glob_include_exclude_precedence() {
 
     assert_eq!(fs::read_to_string(dir.path().join("a.txt")).unwrap(), "bar"); // Matches include, not excluded
     assert_eq!(fs::read_to_string(dir.path().join("b.txt")).unwrap(), "foo"); // Matches include, but excluded -> Skip
-    assert_eq!(fs::read_to_string(dir.path().join("c.md")).unwrap(), "foo");  // No match include -> Skip
+    assert_eq!(fs::read_to_string(dir.path().join("c.md")).unwrap(), "foo"); // No match include -> Skip
 }
 
 #[test]
