@@ -3,7 +3,7 @@ on:
   pull_request:
   push:
     branches:
-    - master
+    - main
   schedule:
   - cron: '00 01 * * *'
 jobs:
@@ -61,7 +61,7 @@ jobs:
 
     - name: Run tests
       run: cargo test --verbose --workspace
-  
+
   rustfmt:
     name: rustfmt
     runs-on: ubuntu-latest
