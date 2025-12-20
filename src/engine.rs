@@ -633,13 +633,27 @@ fn generate_diff(old: &str, new: &str) -> Option<String> {
 }
 
 fn normalize_path(path: &Path, cwd: &Path) -> PathBuf {
-    let path = if path.is_absolute() {
-        path.strip_prefix(cwd).unwrap_or(path)
+    let path_cow = if path.is_absolute() {
+        match path.strip_prefix(cwd) {
+            Ok(p) => std::borrow::Cow::Borrowed(p),
+            Err(_) => {
+                // Handle cases like macOS /var vs /private/var
+                if let (Ok(c_path), Ok(c_cwd)) = (fs::canonicalize(path), fs::canonicalize(cwd)) {
+                    if let Ok(stripped) = c_path.strip_prefix(&c_cwd) {
+                        std::borrow::Cow::Owned(stripped.to_path_buf())
+                    } else {
+                        std::borrow::Cow::Borrowed(path)
+                    }
+                } else {
+                    std::borrow::Cow::Borrowed(path)
+                }
+            }
+        }
     } else {
-        path
+        std::borrow::Cow::Borrowed(path)
     };
 
-    let components = path.components();
+    let components = path_cow.components();
     let mut filtered = PathBuf::new();
     let mut pushed = false;
     for component in components {
