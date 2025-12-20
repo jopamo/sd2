@@ -1,28 +1,58 @@
 # Integrating `sd2` into a Model Context Protocol (MCP) Server
 
-This document outlines how to wrap the `sd2` binary as a tool within a Python-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server.
+This document describes how to expose the `sd2` binary as a tool in a Python-based **Model Context Protocol (MCP)** server.
 
-This integration allows LLMs (like Claude Desktop, cursor, or custom agents) to perform **safe, atomic, and deterministic** search-and-replace operations on your codebase using `sd2`'s robust engine.
+The goal is to allow LLMs (Claude Desktop, Cursor, or custom agents) to perform **safe, atomic, and deterministic** text edits on a codebase by delegating all mutation logic to `sd2`.
+
+This integration treats `sd2` as the **sole authority** for filesystem edits.
+
+---
+
+## Goals
+
+* Allow LLMs to request refactors without writing ad-hoc scripts
+* Guarantee atomicity and rollback on failure
+* Provide structured, machine-readable feedback
+* Avoid shell injection, heuristic matching, or partial writes
+
+---
 
 ## Prerequisites
 
-1.  **`sd2` Installed:** The binary must be in your system `$PATH` or bundled with the python project.
-2.  **Python 3.10+**
-3.  **`uv`** (Recommended) or `pip`.
+* `sd2` installed and available on `$PATH` (or via absolute path)
+* Python **3.10+**
+* `uv` (recommended) or `pip`
+* An MCP-capable client (Claude Desktop, Cursor, etc.)
+
+---
 
 ## Architecture
 
-The architecture relies on the **stdio** transport layer. The Python script runs as the MCP server, and internally uses `subprocess` to call the `sd2` CLI.
+The integration uses MCP’s **stdio transport**.
+
+The Python process acts as the MCP server and invokes `sd2` via `subprocess`.
+All filesystem mutation happens inside `sd2`.
 
 ```mermaid
-[LLM Client] <--> (MCP Protocol / Stdio) <--> [Python MCP Server] <--> (Subprocess) <--> [sd2 Binary] <--> [Filesystem]
+[LLM Client]
+    ⇄ MCP (stdio)
+        ⇄ Python MCP Server
+            ⇄ subprocess
+                ⇄ sd2
+                    ⇄ filesystem
 ```
 
-## Implementation Guide
+Key properties:
 
-### 1. Project Setup
+* The LLM never touches the filesystem directly
+* The Python layer is a thin adapter, not an editor
+* `sd2 --format json` is the API boundary
 
-Create a new directory and initialize the project:
+---
+
+## Project Setup
+
+Create a new Python project for the MCP server:
 
 ```bash
 uv init sd2-mcp
@@ -30,13 +60,27 @@ cd sd2-mcp
 uv add "mcp[cli]"
 ```
 
-### 2. The Python Server (`server.py`)
+This project should contain **no code that edits files directly**.
 
-Create a `server.py` file. We will utilize `sd2`'s `--format json` output to provide structured feedback to the LLM.
+---
 
-We will expose two main tools:
-1.  **`sd2_replace`**: For quick, simple replacements.
-2.  **`sd2_apply`**: For complex, multi-file atomic transactions (Agent Mode).
+## Python MCP Server
+
+### Overview
+
+The server exposes two tools:
+
+1. **`sd2_replace`**
+   Simple, direct replacements on explicit file lists
+
+2. **`sd2_apply`**
+   Manifest-based, multi-file atomic operations (agent mode)
+
+All output is derived from `sd2`’s JSON event stream.
+
+---
+
+### `server.py`
 
 ```python
 import json
@@ -46,78 +90,76 @@ import tempfile
 from typing import Optional, List, Dict, Any
 from mcp.server.fastmcp import FastMCP
 
-# Initialize the MCP Server
 mcp = FastMCP("sd2-tools")
 
-SD2_BINARY = "sd2"  # Ensure this is in PATH or provide absolute path
+SD2_BINARY = "sd2"  # must be resolvable via PATH or absolute path
+
 
 def run_sd2_command(args: List[str], input_data: Optional[str] = None) -> str:
     """
-    Helper to run sd2 and parse its JSON output into a human-readable summary for the LLM.
+    Run sd2 with forced JSON output and summarize results for the LLM.
     """
-    # Force JSON format for reliable parsing
     final_args = [SD2_BINARY] + args + ["--format=json"]
-    
+
     try:
         process = subprocess.Popen(
             final_args,
             stdin=subprocess.PIPE if input_data else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
         )
         stdout, stderr = process.communicate(input=input_data)
     except FileNotFoundError:
-        return f"Error: '{SD2_BINARY}' binary not found. Please install sd2."
+        return f"Error: '{SD2_BINARY}' not found in PATH"
 
-    # Parse sd2 JSON events (newline delimited)
-    summary = []
+    modified = []
     errors = []
-    modified_files = []
-    
+
     for line in stdout.splitlines():
-        if not line.strip(): 
+        if not line.strip():
             continue
+
         try:
             event = json.loads(line)
-            
-            # Handle specific event types
-            if "file" in event:
-                data = event["file"]
-                path = data.get("path")
-                if data["type"] == "success":
-                    if data.get("modified"):
-                        modified_files.append(f"{path} ({data['replacements']} replacements)")
-                elif data["type"] == "error":
-                    errors.append(f"Error processing {path}: {data['message']}")
-                elif data["type"] == "skipped":
-                    # Optional: Log skipped files if verbose
-                    pass
-            
-            elif "run_end" in event:
-                data = event["run_end"]
-                if data.get("policy_violation"):
-                    errors.append(f"Policy Violation: {data['policy_violation']}")
-
         except json.JSONDecodeError:
             continue
 
-    # Construct Final Output for the LLM
-    output_msg = []
-    if modified_files:
-        output_msg.append("### Successfully Modified:")
-        output_msg.extend([f"- {f}" for f in modified_files])
+        if "file" in event:
+            f = event["file"]
+            path = f.get("path", "<unknown>")
+
+            if f["type"] == "success" and f.get("modified"):
+                modified.append(
+                    f"{path} ({f.get('replacements', 0)} replacements)"
+                )
+
+            elif f["type"] == "error":
+                errors.append(f"{path}: {f.get('message')}")
+
+        elif "run_end" in event:
+            if event["run_end"].get("policy_violation"):
+                errors.append(
+                    f"Policy violation: {event['run_end']['policy_violation']}"
+                )
+
+    out = []
+
+    if modified:
+        out.append("### Modified files")
+        out.extend(f"- {m}" for m in modified)
     else:
-        output_msg.append("No files were modified.")
+        out.append("No files were modified")
 
     if errors:
-        output_msg.append("\n### Errors:")
-        output_msg.extend([f"- {e}" for e in errors])
-        
-    if stderr:
-        output_msg.append(f"\n### Stderr:\n{stderr}")
+        out.append("\n### Errors")
+        out.extend(f"- {e}" for e in errors)
 
-    return "\n".join(output_msg)
+    if stderr.strip():
+        out.append("\n### stderr")
+        out.append(stderr)
+
+    return "\n".join(out)
 
 
 @mcp.tool()
@@ -126,75 +168,59 @@ def sd2_replace(
     replace: str,
     files: List[str],
     regex: bool = False,
-    word_regexp: bool = False,
-    fixed_strings: bool = False,
-    dry_run: bool = False
+    dry_run: bool = False,
 ) -> str:
     """
-    Perform a robust search and replace on specific files.
-    
-    Args:
-        find: The pattern to search for.
-        replace: The string to replace it with.
-        files: List of file paths to process.
-        regex: Treat 'find' as a regular expression.
-        word_regexp: Match only whole words.
-        fixed_strings: Treat 'find' as a literal string (disables regex).
-        dry_run: Preview changes without modifying files.
+    Perform a simple search-and-replace on explicit files.
     """
     args = [find, replace] + files
-    
-    if regex: args.append("--regex")
-    if fixed_strings: args.append("--fixed-strings")
-    if word_regexp: args.append("--word-regexp")
-    if dry_run: args.append("--dry-run")
-    
+
+    if regex:
+        args.append("--regex")
+    if dry_run:
+        args.append("--dry-run")
+
     return run_sd2_command(args)
 
 
 @mcp.tool()
-def sd2_apply(manifest: Dict[str, Any], dry_run: bool = False) -> str:
+def sd2_apply(
+    manifest: Dict[str, Any],
+    dry_run: bool = False,
+) -> str:
     """
-    Apply a complex, atomic refactoring manifest. 
-    Use this for multi-file edits or when needing 'delete' operations.
-    
-    The manifest schema matches the sd2 JSON schema:
-    {
-      "files": ["path/to/file.py"],
-      "transaction": "all",
-      "operations": [
-        { "type": "replace", "find": "foo", "with": "bar" },
-        { "type": "delete", "find": "TODO: remove" }
-      ]
-    }
+    Apply a manifest describing multi-file atomic operations.
     """
-    # Create a temporary file for the manifest
-    with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as tmp:
-        json.dump(manifest, tmp)
-        tmp_path = tmp.name
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False
+    ) as f:
+        json.dump(manifest, f)
+        manifest_path = f.name
 
     try:
-        args = ["apply", "--manifest", tmp_path]
+        args = ["apply", "--manifest", manifest_path]
         if dry_run:
             args.append("--dry-run")
-            
+
         return run_sd2_command(args)
     finally:
-        # Cleanup
         try:
-            shutil.os.remove(tmp_path)
+            shutil.os.remove(manifest_path)
         except OSError:
             pass
+
 
 if __name__ == "__main__":
     mcp.run()
 ```
 
-### 3. Integration Configuration
+---
 
-#### For Claude Desktop
+## Client Configuration
 
-Add the following to your `claude_desktop_config.json`:
+### Claude Desktop
+
+Add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -210,14 +236,64 @@ Add the following to your `claude_desktop_config.json`:
 }
 ```
 
-#### For Cursor
+---
 
-In Cursor's generic MCP settings, add a new server with:
-*   **Type:** Stdio
-*   **Command:** `uv run /absolute/path/to/sd2-mcp/server.py`
+### Cursor
 
-## Why Integration works well
+Add a new MCP server:
 
-1.  **Safety:** `sd2`'s `--transaction=all` (which is default in Agent mode) ensures that if the LLM makes a mistake in *one* file during a multi-file refactor, *none* of the files are touched. The codebase is never left in a broken, half-edited state.
-2.  **Determinism:** Unlike `sed` or Python scripts generated on the fly by LLMs, `sd2` has predictable behavior for binary files, symlinks, and permissions.
-3.  **Feedback Loop:** The Python wrapper parses `sd2`'s detailed JSON events. If an edit fails (e.g., "No matches found" when `require_match` is implicit), the LLM gets exact feedback and can self-correct the regex.
+* **Transport:** stdio
+* **Command:**
+
+  ```text
+  uv run /absolute/path/to/sd2-mcp/server.py
+  ```
+
+---
+
+## Behavioral Guarantees
+
+This integration relies on guarantees provided by `sd2`:
+
+### Atomicity
+
+* Default `transaction=all`
+* If any file fails, **no files are modified**
+
+### Determinism
+
+* No implicit traversal
+* No heuristic matching
+* Binary, symlink, and permission handling is explicit
+
+### Structured Feedback
+
+* Every action produces structured JSON events
+* Policy failures are explicit
+* Errors are machine-readable and stable
+
+---
+
+## Non-Goals
+
+This integration intentionally does **not**:
+
+* Allow the LLM to write files directly
+* Generate or execute arbitrary shell code
+* Guess which files should be edited
+* Perform directory traversal
+
+All such logic must be expressed explicitly via `sd2`.
+
+---
+
+## Recommended Agent Usage
+
+* Use **`sd2_replace`** for small, obvious changes
+* Use **`sd2_apply`** for:
+
+  * multi-file refactors
+  * deletes
+  * policy-guarded edits
+* Always start with `dry_run` when uncertain
+* Use JSON event feedback to refine the next request

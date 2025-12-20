@@ -2,107 +2,223 @@
 
 Developer onboarding for `sd2`.
 
-* For end-user CLI usage, see `README.md`.
-* For internal architecture and module layout, see `DESIGN.md`.
+* End-user CLI usage: `README.md`
+* Internal architecture and data flow: `DESIGN.md`
+
+This document is **normative** for contributors.
+
+---
 
 ## Project Overview
 
-`sd2` is a next-generation stream-oriented text processor written in Rust. It is designed for two primary audiences:
-1.  **Humans:** Offering a safer, clearer alternative to `sed` and `awk` with atomic writes and explicit operations.
-2.  **AI Agents:** Providing a formal, machine-readable API (via JSON schemas and manifests) for deterministic refactoring without shell injection risks.
+`sd2` is a stream-oriented text processor written in Rust.
 
-**Key Design Principles:**
-*   **Atomic Transactions:** Writes are atomic; files are never left partially modified.
-*   **No Implicit Traversal:** Does not walk directories by default; delegates to tools like `ripgrep` or `fd`.
-*   **Structured I/O:** Supports JSON manifests for defining operations and JSON output for reporting.
-*   **Pipeline-First:** Designed to work effectively in Unix pipelines.
+It serves two audiences:
+
+1. **Humans**
+   A safer, clearer alternative to `sed`/`awk`, with atomic edits and explicit scope.
+
+2. **AI agents**
+   A deterministic refactoring engine with strict JSON schemas, manifests, and event output.
+   No shell injection, no heuristics, no hidden behavior.
+
+---
+
+## Core Design Principles
+
+These are not preferences. They are invariants.
+
+* **Atomic transactions**
+  Files are never left partially modified. All writes are transactional.
+
+* **Explicit scope**
+  `sd2` does not walk directories or infer intent.
+  Input files must be named or streamed explicitly.
+
+* **Structured I/O**
+  Manifests and JSON output are first-class APIs, not debug features.
+
+* **Pipeline-first**
+  Designed to compose with Unix tools (`rg`, `fd`, `find`) cleanly and predictably.
+
+If a change violates one of these, it is incorrect.
+
+---
 
 ## Architecture
 
-`sd2`'s internal architecture, module map, and data-flow notes live in `DESIGN.md`.
+High-level architecture, module layout, and data-flow diagrams live in `DESIGN.md`.
+
+This file intentionally avoids duplicating that material.
+
+---
 
 ## Building and Running
 
 ### Prerequisites
-*   Rust toolchain (v1.86.0+)
-*   `rg` (ripgrep) is required for some integration tests (`tests/ripgrep_workflow.rs` currently invokes `/usr/bin/rg`).
 
-### Commands
+* Rust toolchain ≥ **1.86**
+* `rg` (ripgrep)
 
-*   **Build:**
-    ```bash
-    cargo build
-    ```
+  * Required for some integration tests
+  * `tests/ripgrep_workflow.rs` currently invokes `/usr/bin/rg`
 
-*   **Run:**
-    ```bash
-    cargo run -- <args>
-    ```
+---
 
-*   **Test:**
-    ```bash
-    cargo test
-    ```
+### Common Commands
 
-*   **Format:**
-    ```bash
-    cargo fmt --all
-    ```
+**Build**
 
-*   **Lint:**
-    ```bash
-    cargo clippy --all-targets --all-features -- -D warnings
-    ```
+```bash
+cargo build
+```
 
-*   **Install (Local):**
-    ```bash
-    cargo install --path .
-    ```
+**Run**
 
-### Usage Examples
+```bash
+cargo run -- <args>
+```
 
-*   **Basic Replacement:**
-    ```bash
-    cargo run -- "find_pattern" "replace_pattern" src/main.rs
-    ```
+**Test**
 
-*   **Dry Run:**
-    ```bash
-    cargo run -- "foo" "bar" src/main.rs --dry-run
-    ```
+```bash
+cargo test
+```
 
-*   **Schema Dump (for Agents):**
-    ```bash
-    cargo run -- schema
-    ```
+**Format**
 
-*   **Apply Manifest:**
-    ```bash
-    cargo run -- apply --manifest examples/manifest.json
-    ```
+```bash
+cargo fmt --all
+```
 
-*   **Stdin Paths (from fd):**
-    ```bash
-    fd -e rs | cargo run -- "foo" "bar"
-    ```
+**Lint**
 
-*   **Ripgrep JSON input:**
-    ```bash
-    rg --json "TODO" | cargo run -- --rg-json "TODO" "FIXME"
-    ```
+```bash
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+**Local install**
+
+```bash
+cargo install --path .
+```
+
+---
+
+## Development Usage Examples
+
+**Basic replacement**
+
+```bash
+cargo run -- "find_pattern" "replace_pattern" src/main.rs
+```
+
+**Dry run**
+
+```bash
+cargo run -- "foo" "bar" src/main.rs --dry-run
+```
+
+**Dump JSON schema (agent tooling)**
+
+```bash
+cargo run -- schema
+```
+
+**Apply manifest**
+
+```bash
+cargo run -- apply --manifest examples/manifest.json
+```
+
+**Read file paths from stdin**
+
+```bash
+fd -e rs | cargo run -- "foo" "bar"
+```
+
+**Consume ripgrep JSON spans**
+
+```bash
+rg --json "TODO" | cargo run -- --rg-json "TODO" "FIXME"
+```
+
+---
 
 ## Development Conventions
 
-*   **Code Style:** Follow standard Rust formatting (`cargo fmt`) and clippy advice (`cargo clippy`).
-*   **Safety:** Prioritize atomic operations. Never modify a file in-place without a strategy to prevent data loss on crash.
-*   **Testing:**
-    *   Unit tests are co-located in source files (e.g., `src/replacer/mod.rs`).
-    *   Integration tests likely exist (implied by `assert_cmd` in dev-dependencies) or should be added to `tests/`.
-*   **Agent Interaction:** When adding features, consider how an AI agent would invoke them. Ensure schemas are updated (`model.rs`) and CLI flags have corresponding JSON manifest fields.
+### Code Style
+
+* Always run `cargo fmt`
+* Treat `cargo clippy -D warnings` as non-negotiable
+
+---
+
+### Safety and Correctness
+
+* Never modify files in place
+* Every write must be crash-safe
+* Temporary files must be cleaned up on failure
+* Behavior must be identical across:
+
+  * file mode
+  * stdin-text mode
+  * manifest mode
+
+---
+
+### Testing
+
+* Unit tests live alongside implementation where practical
+
+  * e.g. `src/replacer/mod.rs`
+* Integration tests belong in `tests/`
+* Any behavior change requires tests
+* If behavior is hard to test, that is a design smell
+
+---
+
+### Agent-Facing APIs
+
+When adding or modifying behavior:
+
+* Update JSON schemas (`model.rs`)
+* Ensure CLI flags map cleanly to manifest fields
+* Ensure emitted JSON events remain deterministic
+* Never introduce undocumented fields or silent behavior
+
+If an agent cannot rely on it, it is broken.
+
+---
 
 ## Contribution Flow
 
-1. Create a focused change (small PRs are preferred).
-2. Add/update tests when behavior changes (`cargo test`).
-3. Run formatting and linting (`cargo fmt --all`, `cargo clippy --all-targets --all-features -- -D warnings`).
-4. Submit a PR with a clear description, including any user-facing CLI or JSON schema changes.
+1. Make a focused change
+   Small, reviewable diffs only
+
+2. Update tests
+   `cargo test` must pass
+
+3. Run tooling
+   `cargo fmt`
+   `cargo clippy -D warnings`
+
+4. Submit a PR
+   Include:
+
+   * what changed
+   * why it changed
+   * any CLI or JSON contract impact
+
+---
+
+## Non-Goals
+
+These are explicitly out of scope:
+
+* Implicit directory traversal
+* Heuristic matching
+* “Smart” behavior that hides ambiguity
+* Compatibility hacks that break determinism
+
+If a feature needs guessing, it does not belong in `sd2`.

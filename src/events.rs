@@ -56,16 +56,14 @@ pub enum FileEvent {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum SkipReason {
     Binary,
     Symlink,
     GlobExclude,
-    NotModified, // Maybe not needed if we have Success with modified: false, but sometimes useful to be explicit if filtered out?
-                 // Actually the TODO says "changed/skipped/error stats + reason enums".
-                 // "NotModified" is usually a Success case with 0 replacements.
-                 // "Skipped" usually implies we didn't even try to replace because of some property of the file.
+    #[serde(untagged)]
+    Other(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,4 +77,41 @@ pub struct RunEnd {
     pub committed: bool,
     pub duration_ms: u64,
     pub exit_code: i32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_skip_reason_serialization() {
+        // Standard variants
+        let r = SkipReason::Binary;
+        assert_eq!(serde_json::to_string(&r).unwrap(), "\"binary\"");
+
+        let r = SkipReason::Symlink;
+        assert_eq!(serde_json::to_string(&r).unwrap(), "\"symlink\"");
+
+        // Other variant (untagged)
+        let r = SkipReason::Other("custom reason".into());
+        assert_eq!(serde_json::to_string(&r).unwrap(), "\"custom reason\"");
+        
+        // Edge case: string that matches a variant name
+        // Because of the order and 'untagged', deserialization might prefer the explicit variant if it matches?
+        // But for serialization, it should just be the string.
+        let r = SkipReason::Other("binary".into());
+        assert_eq!(serde_json::to_string(&r).unwrap(), "\"binary\"");
+    }
+
+    #[test]
+    fn test_skip_reason_deserialization() {
+        let r: SkipReason = serde_json::from_str("\"binary\"").unwrap();
+        assert_eq!(r, SkipReason::Binary);
+
+        let r: SkipReason = serde_json::from_str("\"glob_exclude\"").unwrap();
+        assert_eq!(r, SkipReason::GlobExclude);
+
+        let r: SkipReason = serde_json::from_str("\"custom\"").unwrap();
+        assert_eq!(r, SkipReason::Other("custom".into()));
+    }
 }

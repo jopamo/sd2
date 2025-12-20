@@ -54,3 +54,23 @@ fn test_explicit_format_summary() {
         .stdout(predicate::str::contains("modified (1 replacements)")) // Summary part
         .stdout(predicate::str::contains("@@").not()); // Diff header usually contains @@
 }
+
+#[test]
+fn test_explicit_format_agent() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("agent.txt");
+    fs::write(&file_path, "foo bar").unwrap();
+
+    let mut cmd = cargo_bin_cmd!("sd2");
+    cmd.arg("foo")
+        .arg("baz")
+        .arg(&file_path)
+        .arg("--dry-run")
+        .arg("--format=agent");
+
+    cmd.assert()
+        .stdout(predicate::str::contains(format!("<file path=\"{}\">", file_path.display())))
+        .stdout(predicate::str::contains("-foo bar"))
+        .stdout(predicate::str::contains("+baz bar"))
+        .stdout(predicate::str::contains("</file>"));
+}

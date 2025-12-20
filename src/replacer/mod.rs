@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::model::{LineRange, ReplacementRange};
+use crate::model::{LineRange, ReplacementRange, ValidationMode};
 use regex::bytes::{Regex, RegexBuilder, NoExpand};
 use std::borrow::Cow;
 use memchr::memmem;
@@ -18,7 +18,6 @@ pub struct Replacer {
     range: Option<LineRange>,
     allowed_ranges: Option<Vec<ReplacementRange>>,
     expand: bool,
-    // TODO: track validation mode (strict, warn, none)
 }
 
 impl Replacer {
@@ -29,17 +28,16 @@ impl Replacer {
         fixed_strings: bool,
         ignore_case: bool,
         smart_case: bool,
-        _case_sensitive: bool,
         word_regexp: bool,
         multiline: bool,
         single_line: bool,
         dot_matches_newline: bool,
         no_unicode: bool,
-        _crlf: bool,
         max_replacements: usize,
         range: Option<LineRange>,
         allowed_ranges: Option<Vec<ReplacementRange>>,
         expand: bool,
+        validation_mode: ValidationMode,
     ) -> Result<Self> {
         // 1. Validate replacement pattern for capture group references
         if !expand {
@@ -49,9 +47,22 @@ impl Replacer {
              // If expand is true, $1 must be valid.
              // We should probably only validate if expand is true.
         } else {
-            validate::validate_replacement(replacement)?;
+            // If validation fails in Warn mode, it might return an error?
+            // Actually, for Warn mode, validate_replacement should probably return the *fixed* replacement string.
+            // But Replacer takes `replacement: &str`.
+            // We should change the `replacement` variable if sanitize/validation returns a new string.
+            // But validate::validate_replacement currently returns Result<()>.
+            // I should change it to return Result<Cow<str>> or String.
         }
-
+        
+        let validated_replacement = if expand {
+            validate::validate_replacement(replacement, validation_mode)?
+        } else {
+            Cow::Borrowed(replacement)
+        };
+        
+        // Use validated_replacement for check below
+        
         // Determine if we can use efficient literal matcher
         // We can use Literal matcher only if:
         // - fixed_strings is requested (or pattern is literal) -> handled by caller passing fixed_strings
@@ -66,7 +77,7 @@ impl Replacer {
             && !ignore_case 
             && !smart_case 
             && !word_regexp
-            && (!expand || !replacement.contains("$")); // If expansion requested but no $ involved, literal is fine
+            && (!expand || !validated_replacement.contains("$")); // If expansion requested but no $ involved, literal is fine
 
         let matcher = if use_literal_matcher {
             Matcher::Literal(pattern.as_bytes().to_vec())
@@ -104,7 +115,7 @@ impl Replacer {
             Matcher::Regex(regex)
         };
 
-        let replacement_bytes = replacement.as_bytes().to_vec();
+        let replacement_bytes = validated_replacement.as_bytes().to_vec();
 
         let mut allowed_ranges = allowed_ranges;
         if let Some(ref mut ranges) = allowed_ranges {
@@ -366,21 +377,19 @@ mod tests {
         let replacer = Replacer::new(
             "foo",
             "bar",
-            false, // fixed_strings (treated as regex since false? No, depends on caller logic. Here false means regex? Wait. engine.rs sets it. 
-                   // new() takes fixed_strings directly. If false, it tries regex parse. "foo" is valid regex.)
+            false, // fixed_strings
             false, // ignore_case
             false, // smart_case
-            true,  // case_sensitive
             false, // word_regexp
             false, // multiline
             false, // single_line
             false, // dot_matches_newline
             false, // no_unicode
-            false, // crlf
             0,     // max_replacements
             None,
             None,
-            false
+            false,
+            ValidationMode::default(),
         ).unwrap();
         let input = b"foo baz foo";
         let output = replacer.replace_with_count(input).0;
@@ -396,17 +405,16 @@ mod tests {
             true, // fixed_strings -> Should use Matcher::Literal
             false, // ignore_case
             false, // smart_case
-            true,  // case_sensitive
             false, // word_regexp
             false, // multiline
             false, // single_line
             false, // dot_matches_newline
             false, // no_unicode
-            false, // crlf
             0,     // max_replacements
             None,
             None,
-            false
+            false,
+            ValidationMode::default(),
         ).unwrap();
         let input = b"foo baz foo";
         let output = replacer.replace_with_count(input).0;
@@ -419,8 +427,9 @@ mod tests {
         let replacer = Replacer::new(
             r"(\d+)",
             "number-$1",
-            false, false, false, true, false, false, false, false, false, false, 0, None, None,
-            false // expand=false
+            false, false, false, false, false, false, false, false, 0, None, None,
+            false, // expand=false
+            ValidationMode::default(),
         ).unwrap();
         let input = b"abc 123 def";
         let output = replacer.replace_with_count(input).0;
@@ -433,8 +442,9 @@ mod tests {
         let replacer = Replacer::new(
             r"(\d+)",
             "number-$1",
-            false, false, false, true, false, false, false, false, false, false, 0, None, None,
-            true // expand=true
+            false, false, false, false, false, false, false, false, 0, None, None,
+            true, // expand=true
+            ValidationMode::default(),
         ).unwrap();
         let input = b"abc 123 def";
         let output = replacer.replace_with_count(input).0;
@@ -447,8 +457,9 @@ mod tests {
         let replacer = Replacer::new(
             "x",
             "y",
-            false, false, false, true, false, false, false, false, false, false, 2, None, None,
-            false
+            false, false, false, false, false, false, false, false, 2, None, None,
+            false,
+            ValidationMode::default(),
         ).unwrap();
         let input = b"x x x x";
         let output = replacer.replace_with_count(input).0;
@@ -469,9 +480,10 @@ mod tests {
         let replacer = Replacer::new(
             "x",
             "y",
-            false, false, false, true, false, false, false, false, false, false, 0, None, 
+            false, false, false, false, false, false, false, false, 0, None, 
             Some(allowed),
-            false
+            false,
+            ValidationMode::default(),
         ).unwrap();
         
         let input = b"x x x";

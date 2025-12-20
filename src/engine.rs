@@ -446,7 +446,7 @@ fn process_content_inner(
     for op in operations {
         match op {
             Operation::Replace { find, with: replacement, literal, ignore_case, smart_case,
-                word, multiline, dot_matches_newline, no_unicode, limit, range, expand } => {
+                word, multiline, dot_matches_newline, no_unicode, limit, range, expand, validation_mode } => {
                 // Build replacer
                 let replacer = Replacer::new(
                     find,
@@ -454,17 +454,16 @@ fn process_content_inner(
                     *literal,
                     *ignore_case,
                     *smart_case,
-                    !(*ignore_case || *smart_case), // case_sensitive
                     *word,
                     *multiline,
                     false, // single_line (not yet supported)
                     *dot_matches_newline,
                     *no_unicode,
-                    false, // crlf
                     *limit,
                     range.clone(),
                     matches.map(|m| m.to_vec()),
                     *expand,
+                    *validation_mode,
                 ).map_err(|e| Error::Validation(e.to_string()))?;
 
                 // Apply replacement to current string (as bytes) and count replacements
@@ -484,17 +483,16 @@ fn process_content_inner(
                     *literal,
                     *ignore_case,
                     *smart_case,
-                    !(*ignore_case || *smart_case), // case_sensitive
                     *word,
                     *multiline,
                     false, // single_line
                     *dot_matches_newline,
                     *no_unicode,
-                    false, // crlf
                     *limit,
                     range.clone(),
                     matches.map(|m| m.to_vec()),
                     false, // expand (no need for empty string)
+                    crate::model::ValidationMode::default(),
                 ).map_err(|e| Error::Validation(e.to_string()))?;
 
                 let (bytes, replacements) = replacer.replace_with_count(current.as_bytes());
@@ -601,6 +599,7 @@ mod tests {
             limit: 0,
             range: None,
             expand: false,
+            validation_mode: crate::model::ValidationMode::default(),
         }
     }
 

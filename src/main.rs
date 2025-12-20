@@ -169,6 +169,8 @@ fn try_main() -> Result<i32> {
             None
         };
 
+        let validation_mode = args.validation_mode.map(Into::into).unwrap_or_default();
+
         let op = Operation::Replace {
             find,
             with: replace,
@@ -182,6 +184,7 @@ fn try_main() -> Result<i32> {
             limit: args.limit.unwrap_or(0),
             range,
             expand: args.expand,
+            validation_mode,
         };
 
         // Resolve permissions

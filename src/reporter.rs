@@ -264,7 +264,7 @@ impl Report {
                     "binary file" => SkipReason::Binary,
                     "symlink" => SkipReason::Symlink,
                     "glob exclude" => SkipReason::GlobExclude,
-                     _ => SkipReason::NotModified, 
+                     other => SkipReason::Other(other.to_string()), 
                 };
                 FileEvent::Skipped {
                     path: file.path.clone(),

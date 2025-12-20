@@ -1,18 +1,52 @@
 # JSON Event Schema
 
-When running `sd2` with `--format json` (or implicit JSON output), the tool emits a stream of newline-delimited JSON objects. Each line is a self-contained event.
+When `sd2` runs with `--format json` (or when JSON output is selected implicitly), it emits a **newline-delimited JSON (NDJSON)** stream.
+Each line is a complete, self-contained event object.
+
+This document is **normative**.
+If emitted JSON diverges from this specification, the implementation is wrong.
+
+---
+
+## General Rules
+
+* Output is **NDJSON** (one JSON object per line)
+* Events are emitted in **strict order**
+* Each event contains **exactly one** top-level key
+* Optional fields are **omitted**, not set to `null`, unless explicitly stated
+* All strings are valid UTF-8
+
+  * Invalid sequences are replaced with U+FFFD (`�`)
+* Unknown reasons or codes must **not** be collapsed or re-labeled
+
+---
 
 ## Event Types
 
-There are three top-level event types, wrapped in a single key:
+There are exactly three event types, wrapped in a single top-level key:
 
-1.  `run_start`: Emitted once at the beginning.
-2.  `file`: Emitted for each file processed.
-3.  `run_end`: Emitted once at the end.
+1. `run_start` — emitted once at the beginning
+2. `file` — emitted once per processed input item
+3. `run_end` — emitted once at the end
 
-### 1. Run Start (`run_start`)
+---
 
-Contains metadata about the execution, configuration, and policies.
+## Event Order
+
+Events are emitted in this order:
+
+1. Exactly one `run_start`
+2. Zero or more `file` events
+3. Exactly one `run_end`
+
+---
+
+## 1. Run Start Event
+
+### `run_start`
+
+Emitted once at the beginning of execution.
+Describes configuration, modes, and active policies.
 
 ```json
 {
@@ -34,22 +68,42 @@ Contains metadata about the execution, configuration, and policies.
 }
 ```
 
-**Fields:**
-*   `schema_version`: Version of this JSON schema (currently "1").
-*   `tool_version`: Version of `sd2`.
-*   `mode`: Execution mode ("cli" or "apply").
-*   `input_mode`: How inputs were provided ("args", "stdin-paths", "stdin-text", "rg-json", "files0").
-*   `transaction_mode`: Transaction safety level ("all" or "file").
-*   `dry_run`, `validate_only`, `no_write`: Boolean flags indicating safety modes.
-*   `policies`: Object containing policy configuration (`require_match`, `expect`, `fail_on_change`).
+### Fields
 
-### 2. File Event (`file`)
+| Field              | Type    | Description                                                                      |
+| ------------------ | ------- | -------------------------------------------------------------------------------- |
+| `schema_version`   | string  | JSON event schema version. Currently `"1"`                                       |
+| `tool_version`     | string  | `sd2` version string                                                             |
+| `mode`             | string  | `"cli"` or `"apply"`                                                             |
+| `input_mode`       | string  | `"args"`, `"stdin-paths"`, `"stdin-text"`, `"rg-json"`, `"files0"`, `"manifest"` |
+| `transaction_mode` | string  | `"all"` or `"file"`                                                              |
+| `dry_run`          | boolean | Dry-run mode enabled                                                             |
+| `validate_only`    | boolean | Validation-only mode enabled                                                     |
+| `no_write`         | boolean | Filesystem writes disabled                                                       |
+| `policies`         | object  | Active policy configuration                                                      |
 
-Describes the result of processing a single file. The object contains a `type` field indicating the outcome.
+#### `policies` fields
 
-#### Success
+| Field            | Type           | Description                    |
+| ---------------- | -------------- | ------------------------------ |
+| `require_match`  | boolean        | Fail if zero matches occur     |
+| `expect`         | number or null | Require exactly N replacements |
+| `fail_on_change` | boolean        | Fail if any change would occur |
 
-Emitted when a file was successfully processed (even if no changes were made).
+---
+
+## 2. File Event
+
+### `file`
+
+Emitted once per input item that is considered for processing.
+The `type` field determines the event shape.
+
+---
+
+### Success
+
+Emitted when a file or virtual input was processed successfully, even if no changes were made.
 
 ```json
 {
@@ -60,25 +114,29 @@ Emitted when a file was successfully processed (even if no changes were made).
     "replacements": 2,
     "diff": "---\n+++ \n@@ -1 +1 @@\n-foo\n+bar\n",
     "diff_is_binary": false,
-    "generated_content": null,
     "is_virtual": false
   }
 }
 ```
 
-**Fields:**
-*   `type`: "success"
-*   `path`: Path to the file. For virtual inputs (stdin), this may be `<stdin>`.
-*   `modified`: `true` if changes were made (or would be made in dry-run).
-*   `replacements`: Number of replacements performed.
-*   `diff`: Unified diff string (optional, usually present in dry-run or validation). Invalid UTF-8 sequences are replaced with the replacement character.
-*   `diff_is_binary`: `true` if the diff was suppressed or flagged because the file was binary (sanitization handling).
-*   `generated_content`: The full transformed content (optional, mostly for `stdin-text` mode).
-*   `is_virtual`: `true` if the file does not exist on disk (e.g., stdin input).
+#### Fields
 
-#### Skipped
+| Field               | Type    | Description                                               |
+| ------------------- | ------- | --------------------------------------------------------- |
+| `type`              | string  | Always `"success"`                                        |
+| `path`              | string  | Absolute path, or a virtual identifier (e.g. `"<stdin>"`) |
+| `modified`          | boolean | `true` if changes were made or would be made              |
+| `replacements`      | number  | Number of replacements performed                          |
+| `diff`              | string  | Unified diff. Omitted if unavailable                      |
+| `diff_is_binary`    | boolean | `true` if diff was suppressed due to binary content       |
+| `generated_content` | string  | Full transformed content. Omitted unless relevant         |
+| `is_virtual`        | boolean | `true` if input does not exist on disk                    |
 
-Emitted when a file was skipped due to configuration or file type.
+---
+
+### Skipped
+
+Emitted when an input item was intentionally skipped.
 
 ```json
 {
@@ -90,14 +148,27 @@ Emitted when a file was skipped due to configuration or file type.
 }
 ```
 
-**Fields:**
-*   `type`: "skipped"
-*   `path`: Path to the file.
-*   `reason`: Why it was skipped. Values: "binary", "symlink", "glob_exclude", "not_modified".
+#### Fields
 
-#### Error
+| Field    | Type   | Description                |
+| -------- | ------ | -------------------------- |
+| `type`   | string | Always `"skipped"`         |
+| `path`   | string | Path or virtual identifier |
+| `reason` | string | Reason for skipping        |
 
-Emitted when an operational error occurred for a specific file (e.g., permission denied).
+`reason` is an open set. Known values include:
+
+* `binary`
+* `symlink`
+* `glob_exclude`
+
+Unknown reasons must be preserved verbatim.
+
+---
+
+### Error
+
+Emitted when an operational error occurs while processing a specific input.
 
 ```json
 {
@@ -110,20 +181,29 @@ Emitted when an operational error occurred for a specific file (e.g., permission
 }
 ```
 
-**Fields:**
-*   `type`: "error"
-*   `path`: Path to the file.
-*   `code`: Machine-readable error code (e.g., "E_ACCES", "E_NOT_FOUND", "E_IO").
-*   `message`: Human-readable error message.
+#### Fields
 
-### 3. Run End (`run_end`)
+| Field     | Type   | Description                  |
+| --------- | ------ | ---------------------------- |
+| `type`    | string | Always `"error"`             |
+| `path`    | string | Path or virtual identifier   |
+| `code`    | string | Machine-readable error code  |
+| `message` | string | Human-readable error message |
 
-Emitted after all files are processed. Contains aggregate statistics and final status.
+Error codes are stable and suitable for automation.
+
+---
+
+## 3. Run End Event
+
+### `run_end`
+
+Emitted once after all file events.
+Contains aggregate statistics and final status.
 
 ```json
 {
   "run_end": {
-    "schema_version": "1",
     "total_files": 10,
     "total_processed": 10,
     "total_modified": 2,
@@ -137,15 +217,27 @@ Emitted after all files are processed. Contains aggregate statistics and final s
 }
 ```
 
-**Fields:**
-*   `total_files`: Total files scanned.
-*   `total_processed`: Number of files actually processed (matched globs, etc.).
-*   `total_modified`: Number of files modified.
-*   `total_replacements`: Total replacements across all files.
-*   `has_errors`: `true` if any file-level errors occurred.
-*   `policy_violation`: String describing policy failure (e.g., "No matches found"), or `null`.
-*   `committed`: `true` if the transaction was successfully committed (always `false` for dry-run).
-*   `duration_ms`: Execution duration in milliseconds.
-*   `exit_code`: Suggested process exit code (0=success, 1=error, 2=policy violation).
+### Fields
 
-```
+| Field                | Type           | Description                        |
+| -------------------- | -------------- | ---------------------------------- |
+| `total_files`        | number         | Total inputs considered            |
+| `total_processed`    | number         | Inputs actually processed          |
+| `total_modified`     | number         | Files modified                     |
+| `total_replacements` | number         | Total replacements                 |
+| `has_errors`         | boolean        | Any file-level errors occurred     |
+| `policy_violation`   | string or null | Policy failure description         |
+| `committed`          | boolean        | Transaction committed successfully |
+| `duration_ms`        | number         | Execution duration                 |
+| `exit_code`          | number         | Suggested process exit code        |
+
+`committed` is always `false` for dry-run or validation-only executions.
+
+---
+
+## Stability Guarantees
+
+* Field names are stable within a schema version
+* New fields may be added only in a backward-compatible way
+* Behavior changes require a schema version bump
+* Event order and meanings never depend on output format

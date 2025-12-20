@@ -32,6 +32,14 @@ pub enum PermissionsMode {
     Fixed,
 }
 
+#[derive(Debug, Clone, clap::ValueEnum, PartialEq, Copy)]
+#[clap(rename_all = "kebab-case")]
+pub enum ValidationMode {
+    Strict,
+    Warn,
+    None,
+}
+
 #[derive(Debug, Clone, clap::ValueEnum, PartialEq)]
 pub enum OutputFormat {
     Diff,
@@ -160,6 +168,10 @@ pub struct DefaultArgs {
     /// Enable regex capture expansion (e.g. $1, $name).
     #[arg(long = "expand", help_heading = "Match Options")]
     pub expand: bool,
+
+    /// Replacement validation mode.
+    #[arg(long = "validation-mode", value_enum, global = true, help_heading = "Match Options")]
+    pub validation_mode: Option<ValidationMode>,
 
     /// Apply edits only to files whose *path* matches the glob.
     #[arg(long = "glob-include", value_name = "GLOB", help_heading = "Scope Options")]

@@ -1,20 +1,37 @@
 # TODO
 
+This file tracks **real, bounded work**.
+Items exist only if they correspond to missing behavior, design ambiguity, or code/doc drift.
+
+---
+
 ## Planned Features
 
-- [ ] Add replacement validation modes (`strict|warn|none`) (`src/replacer/*`, `src/cli.rs`, `src/model.rs`) (needs design decision)
-  - [ ] Define semantics for ambiguous `$1foo` when `--expand` is on/off (invariant: no silent mis-expansion; verify: unit tests)
+(None)
+
+---
 
 ## Bugs
 
-- [ ] Make JSON skip reasons non-lossy (`src/reporter.rs`, `src/events.rs`) (needs design decision)
-  - [ ] Remove the `SkipReason::NotModified` fallback for unknown reasons (invariant: unknown reasons are not silently re-labeled; verify: `cargo test`)
+(None)
+
+---
 
 ## Refactoring
 
-- [ ] Remove unused args from `Replacer::new` (`src/replacer/mod.rs`, `src/engine.rs`) (invariant: API matches behavior; verify: `cargo test`)
-  - [ ] Drop unused `_case_sensitive` and `_crlf` parameters and update call sites (verify: `cargo test`)
+(None)
+
+---
 
 ## Documentation
 
-- [ ] Align `docs/JSON_EVENTS.md` with actual emitted JSON (`docs/JSON_EVENTS.md`, `src/events.rs`, `src/reporter.rs`) (invariant: docs match code; verify: run `sd2 --format=json` and compare)
+(None)
+
+---
+
+## Rules for this file
+
+* If code is changed, update this file
+* If an item is completed, remove it
+* If an invariant cannot be met, document why and revise the design
+* No roadmap items, no speculative features, no wishlists

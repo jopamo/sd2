@@ -46,6 +46,15 @@ pub enum PermissionsMode {
     Fixed(u32),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum ValidationMode {
+    #[default]
+    Strict,
+    Warn,
+    None,
+}
+
 /// A single text transformation operation.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", tag = "type")]
@@ -86,6 +95,9 @@ pub enum Operation {
         /// Enable regex capture expansion (e.g. $1, $name).
         #[serde(default)]
         expand: bool,
+        /// Replacement validation mode.
+        #[serde(default)]
+        validation_mode: ValidationMode,
     },
     /// Delete occurrences of a pattern.
     Delete {
@@ -190,6 +202,7 @@ impl Pipeline {
                 limit: 0,
                 range: None,
                 expand: false,
+                validation_mode: ValidationMode::default(),
             }],
             dry_run: false,
             no_write: false,
@@ -231,6 +244,16 @@ impl From<crate::cli::BinaryFileMode> for BinaryFileMode {
         match item {
             crate::cli::BinaryFileMode::Skip => BinaryFileMode::Skip,
             crate::cli::BinaryFileMode::Error => BinaryFileMode::Error,
+        }
+    }
+}
+
+impl From<crate::cli::ValidationMode> for ValidationMode {
+    fn from(item: crate::cli::ValidationMode) -> Self {
+        match item {
+            crate::cli::ValidationMode::Strict => ValidationMode::Strict,
+            crate::cli::ValidationMode::Warn => ValidationMode::Warn,
+            crate::cli::ValidationMode::None => ValidationMode::None,
         }
     }
 }
